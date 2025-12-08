@@ -111,6 +111,29 @@ export function useInventory() {
     return items.value.filter(i => i.name.toLowerCase().includes(lowerQuery));
   };
 
+  const addLocation = async (name: string, icon: string) => {
+    // 1. Validierung
+    if (!name.trim()) return;
+
+    // 2. An DB senden
+    const { data, error } = await supabase
+      .from('locations')
+      .insert({ name, icon }) // user_id wird automatisch durch Supabase gesetzt
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Fehler beim Erstellen:', error);
+      alert('Konnte Ort nicht erstellen.');
+      return;
+    }
+
+    // 3. Lokalen State aktualisieren (damit es sofort sichtbar ist)
+    if (data) {
+      locations.value.push(data);
+    }
+  };
+
   return {
     locations,
     items,
@@ -119,6 +142,7 @@ export function useInventory() {
     updateQuantity,
     getItemsByLocation,
     searchItems,
-    getLocationName
+    getLocationName,
+    addLocation
   };
 }

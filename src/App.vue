@@ -11,7 +11,8 @@ const {
   fetchInventory, 
   getItemsByLocation, 
   searchItems, 
-  loading: dataLoading 
+  loading: dataLoading,
+  addLocation
 } = useInventory();
 
 // Auth Form State
@@ -62,6 +63,28 @@ const goHome = () => {
   currentView.value = 'dashboard';
   selectedLocation.value = null;
   searchQuery.value = '';
+};
+
+// --- NEU: Modal Logik ---
+const newLocName = ref('');
+const newLocIcon = ref('📦'); // Standard Icon
+const addLocationDialog = ref<HTMLDialogElement | null>(null); // Referenz zum HTML Element
+
+// Eine Auswahl passender Icons für den Haushalt
+const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🥖', '🍎', '🥩', '🧊', '🧺'];
+
+const openAddLocationModal = () => {
+  newLocName.value = '';
+  newLocIcon.value = '📦';
+  addLocationDialog.value?.showModal(); // DaisyUI/Native Dialog öffnen
+};
+
+const saveNewLocation = async () => {
+  if (!newLocName.value) return;
+  
+  await addLocation(newLocName.value, newLocIcon.value);
+  
+  addLocationDialog.value?.close(); // Dialog schließen
 };
 </script>
 
@@ -116,9 +139,15 @@ const goHome = () => {
             <h2 class="card-title text-base">{{ loc.name }}</h2>
           </div>
         </div>
-        <div class="card border-2 border-dashed border-base-300 flex items-center justify-center p-6 text-base-content/50">
-          + Bald verfügbar
-        </div>
+        <button 
+          @click="openAddLocationModal"
+          class="card border-2 border-dashed border-base-300 bg-base-100/50 hover:bg-base-100 hover:border-primary transition-colors flex items-center justify-center p-6 cursor-pointer h-full min-h-[140px]"
+        >
+          <div class="text-center text-base-content/60">
+            <div class="text-3xl mb-1">+</div>
+            <div class="font-medium">Ort hinzufügen</div>
+          </div>
+        </button>
       </div>
 
       <div v-else-if="currentView === 'location' && currentLocationData">
@@ -152,6 +181,50 @@ const goHome = () => {
            <ItemRow v-for="item in searchResults" :key="item.id" :item="item" :show-location="true" />
         </div>
      </div>
+
+     <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Neuen Ort erstellen</h3>
+        
+        <div class="form-control w-full mb-4">
+          <label class="label">
+            <span class="label-text">Name des Ortes</span>
+          </label>
+          <input 
+            v-model="newLocName" 
+            type="text" 
+            placeholder="z.B. Vorratskammer" 
+            class="input input-bordered w-full" 
+            @keyup.enter="saveNewLocation"
+          />
+        </div>
+
+        <div class="form-control w-full mb-6">
+          <label class="label">
+            <span class="label-text">Wähle ein Icon</span>
+          </label>
+          <div class="grid grid-cols-6 gap-2">
+            <button 
+              v-for="icon in availableIcons" 
+              :key="icon"
+              @click="newLocIcon = icon"
+              class="btn btn-square text-xl"
+              :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'"
+              type="button"
+            >
+              {{ icon }}
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-action">
+          <form method="dialog">
+            <button class="btn btn-ghost mr-2">Abbrechen</button>
+          </form>
+          <button @click="saveNewLocation" class="btn btn-primary">Erstellen</button>
+        </div>
+      </div>
+    </dialog>
 
   </div>
 </template>
