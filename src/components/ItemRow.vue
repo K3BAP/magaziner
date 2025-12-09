@@ -1,115 +1,166 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { Item } from '../composables/useInventory';
+import type { Item, ItemInstance } from '../composables/useInventory';
 import { useInventory } from '../composables/useInventory';
 
 const props = defineProps<{ item: Item; showLocation?: boolean }>();
-const { updateQuantity, getLocationName, deleteItem } = useInventory(); // deleteItem dazu holen
+const { updateInstanceQuantity, deleteInstance, addInstance, getLocationName } = useInventory();
 
-// State für den Lösch-Dialog
-const showDeleteDialog = ref(false);
+// --- Logik für Instanzen ---
+
+// Dialog für "Neue Instanz hinzufügen"
+const showAddInstanceDialog = ref(false);
+const newInstQty = ref(1);
+const newInstDate = ref('');
+
+// Dialog für "Löschen bestätigen"
 const confirmDialog = ref<HTMLDialogElement | null>(null);
+const instanceToDelete = ref<string | null>(null);
 
-// --- Button Logik ---
-const handleIncrement = () => {
-  // Einfach +1 rechnen
-  updateQuantity(props.item.id, props.item.quantity + 1);
+// Datum Formatter
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
-const handleDecrement = () => {
-  const newQty = props.item.quantity - 1;
-  
-  if (newQty <= 0) {
-    // Wenn 0 erreicht wird -> Dialog öffnen
+// Status Farben (Rot/Gelb/Grau)
+const getExpiryClass = (dateStr: string | null) => {
+  if (!dateStr) return 'text-gray-400';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const expiry = new Date(dateStr);
+  const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (86400000));
+  if (diffDays < 0) return 'text-error font-bold';
+  if (diffDays <= 7) return 'text-warning font-bold';
+  return 'text-gray-500';
+};
+
+const isExpired = (dateStr: string | null) => {
+  if (!dateStr) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const expiry = new Date(dateStr);
+  // Wenn Datum kleiner als heute -> abgelaufen
+  return expiry.getTime() < today.getTime();
+};
+
+// --- Actions ---
+
+const onAddInstanceClick = () => {
+  newInstQty.value = 1;
+  newInstDate.value = '';
+  showAddInstanceDialog.value = true;
+};
+
+const saveNewInstance = async () => {
+  await addInstance(props.item.id, newInstQty.value, newInstDate.value);
+  showAddInstanceDialog.value = false;
+};
+
+const handleDecrement = (inst: ItemInstance) => {
+  const newQ = inst.quantity - 1;
+  if (newQ <= 0) {
+    instanceToDelete.value = inst.id;
     confirmDialog.value?.showModal();
   } else {
-    // Sonst einfach reduzieren
-    updateQuantity(props.item.id, newQty);
+    updateInstanceQuantity(props.item.id, inst.id, newQ);
   }
 };
 
-const confirmDelete = () => {
-  deleteItem(props.item.id);
+const performDelete = () => {
+  if (instanceToDelete.value) {
+    deleteInstance(props.item.id, instanceToDelete.value);
+  }
   confirmDialog.value?.close();
 };
 
-// --- Formatierung (Datum & Farben) wie vorher ---
-const formattedDate = computed(() => {
-  if (!props.item.expiry_date) return null;
-  const date = new Date(props.item.expiry_date);
-  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-});
-
-const expiryStatus = computed(() => {
-  if (!props.item.expiry_date) return 'ok';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(props.item.expiry_date);
-  const diffTime = expiry.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return 'expired';
-  if (diffDays <= 7) return 'warning';
-  return 'ok';
-});
-
-const expiryClass = computed(() => {
-  switch (expiryStatus.value) {
-    case 'expired': return 'text-error font-bold';
-    case 'warning': return 'text-warning font-bold';
-    default: return 'text-gray-400';
-  }
-});
+// Soll die "erweiterte Ansicht" gezeigt werden?
+const isMultiInstance = computed(() => props.item.instances.length > 1);
 </script>
 
 <template>
-  <div class="flex items-center justify-between p-3 bg-base-100 border-b border-base-200 last:border-0">
+  <div class="bg-base-100 border-b border-base-200 last:border-0">
     
-    <div class="flex-1 min-w-0 pr-2">
-      <div class="font-medium text-lg truncate">{{ item.name }}</div>
-      <div class="flex flex-wrap gap-2 text-xs mt-1">
-        <span v-if="showLocation" class="badge badge-ghost badge-sm gap-1">
-          📍 {{ getLocationName(item.location_id) }}
-        </span>
-        <span v-if="item.expiry_date" :class="expiryClass" class="flex items-center gap-1">
-          <span v-if="expiryStatus === 'expired'">⚠️</span>
-          <span v-else>⏳</span>
-          {{ formattedDate }}
-        </span>
-      </div>
+    <div v-if="!isMultiInstance && item.instances.length > 0" class="flex items-center justify-between p-3">
+       <div class="flex-1 min-w-0 pr-2">
+          <div class="font-medium text-lg truncate">{{ item.name }}</div>
+          <div class="flex flex-wrap gap-2 text-xs mt-1">
+             <span v-if="showLocation" class="badge badge-ghost badge-sm gap-1">📍 {{ getLocationName(item.location_id) }}</span>
+             <span v-if="item.instances[0].expiry_date" :class="getExpiryClass(item.instances[0].expiry_date)" class="flex items-center gap-1">
+                ⏳ {{ formatDate(item.instances[0].expiry_date) }}
+             </span>
+          </div>
+       </div>
+
+       <div class="flex items-center gap-2">
+          <button @click="onAddInstanceClick" class="btn btn-xs btn-circle btn-ghost text-primary" title="Weitere Instanz (anderes MHD) hinzufügen">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </button>
+          
+          <div class="flex items-center gap-2 bg-base-200 rounded-lg p-1">
+             <button @click="handleDecrement(item.instances[0])" class="btn btn-xs btn-square btn-ghost hover:bg-white">-</button>
+             <span class="font-bold w-6 text-center text-sm">{{ item.instances[0].quantity }}</span>
+             <button @click="updateInstanceQuantity(item.id, item.instances[0].id, item.instances[0].quantity + 1)" class="btn btn-xs btn-square btn-ghost hover:bg-white">+</button>
+          </div>
+       </div>
     </div>
 
-    <div class="flex items-center gap-3 flex-none">
-      <span class="font-bold text-xl w-8 text-center">{{ item.quantity }}</span>
 
-      <div class="join">
-        <button 
-          @click="handleDecrement" 
-          class="btn btn-sm btn-square join-item hover:bg-error hover:text-white transition-colors"
-        >
-          -
-        </button>
-        
-        <button 
-          @click="handleIncrement" 
-          class="btn btn-sm btn-square join-item btn-primary"
-        >
-          +
-        </button>
-      </div>
+    <div v-else class="p-3">
+       <div class="flex justify-between items-center mb-2">
+          <div>
+            <div class="font-medium text-lg">{{ item.name }}</div>
+            <span v-if="showLocation" class="badge badge-ghost badge-xs">📍 {{ getLocationName(item.location_id) }}</span>
+          </div>
+          <button @click="onAddInstanceClick" class="btn btn-xs btn-primary btn-outline gap-1">
+             + Instanz
+          </button>
+       </div>
+
+       <div class="flex flex-col gap-2 pl-2 border-l-2 border-base-200">
+          <div v-for="inst in item.instances" :key="inst.id" class="flex justify-between items-center text-sm">
+             
+             <div :class="getExpiryClass(inst.expiry_date)" class="flex items-center gap-1">
+                <span v-if="inst.expiry_date">
+                   {{ isExpired(inst.expiry_date) ? '⚠️' : '⏳' }}
+                </span>
+                
+                {{ inst.expiry_date ? formatDate(inst.expiry_date) : 'Kein Datum' }}
+             </div>
+
+             <div class="flex items-center gap-2 bg-base-200 rounded-lg p-0.5">
+                <button @click="handleDecrement(inst)" class="btn btn-xs btn-square btn-ghost hover:bg-white h-6 w-6">-</button>
+                <span class="font-bold w-6 text-center">{{ inst.quantity }}</span>
+                <button @click="updateInstanceQuantity(item.id, inst.id, inst.quantity + 1)" class="btn btn-xs btn-square btn-ghost hover:bg-white h-6 w-6">+</button>
+             </div>
+          </div>
+       </div>
     </div>
 
-    <dialog ref="confirmDialog" class="modal modal-bottom sm:modal-middle text-left">
+
+    <div v-if="showAddInstanceDialog" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+       <div class="bg-base-100 p-4 rounded-xl shadow-xl w-full max-w-xs">
+          <h3 class="font-bold mb-3">Neue Instanz für {{ item.name }}</h3>
+          <div class="form-control mb-2">
+             <label class="label-text text-xs mb-1">Menge</label>
+             <input v-model="newInstQty" type="number" min="1" class="input input-sm input-bordered w-full" autofocus />
+          </div>
+          <div class="form-control mb-4">
+             <label class="label-text text-xs mb-1">Ablaufdatum</label>
+             <input v-model="newInstDate" type="date" class="input input-sm input-bordered w-full" />
+          </div>
+          <div class="flex justify-end gap-2">
+             <button @click="showAddInstanceDialog = false" class="btn btn-sm btn-ghost">Abbrechen</button>
+             <button @click="saveNewInstance" class="btn btn-sm btn-primary">Speichern</button>
+          </div>
+       </div>
+    </div>
+
+    <dialog ref="confirmDialog" class="modal modal-bottom sm:modal-middle">
       <div class="modal-box">
-        <h3 class="font-bold text-lg text-error">Artikel aufbrauchen?</h3>
-        <p class="py-4">
-          Möchtest du <strong>{{ item.name }}</strong> wirklich entfernen? <br>
-          Der Bestand ist dann auf 0.
-        </p>
+        <h3 class="font-bold text-lg text-error">Aufgebraucht?</h3>
+        <p class="py-4">Möchtest du diese Instanz wirklich entfernen?</p>
         <div class="modal-action">
-          <form method="dialog">
-            <button class="btn btn-ghost">Abbrechen</button>
-          </form>
-          <button @click="confirmDelete" class="btn btn-error">Ja, entfernen</button>
+          <form method="dialog"><button class="btn btn-ghost">Nein</button></form>
+          <button @click="performDelete" class="btn btn-error">Ja, weg damit</button>
         </div>
       </div>
     </dialog>

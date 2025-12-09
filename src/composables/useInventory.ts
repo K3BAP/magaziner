@@ -1,8 +1,22 @@
-// src/composables/useInventory.ts
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
 
-// Typen passend zur DB
+// --- NEUE TYPEN ---
+export interface ItemInstance {
+  id: string;
+  item_id: string;
+  quantity: number;
+  expiry_date: string | null;
+}
+
+export interface Item {
+  id: string;
+  name: string;
+  location_id: string;
+  category_id: string | null;
+  instances: ItemInstance[]; // Hier liegen jetzt die Daten!
+}
+
 export interface Location {
   id: string;
   name: string;
@@ -12,19 +26,10 @@ export interface Location {
 export interface Category {
   id: string;
   name: string;
-  location_id: string; // Achtung: Supabase nutzt snake_case (mit Unterstrich)
-}
-
-export interface Item {
-  id: string;
-  name: string;
-  quantity: number;
   location_id: string;
-  category_id: string | null;
-  expiry_date?: string | null;
 }
 
-// Globaler State (damit Daten erhalten bleiben, wenn man Views wechselt)
+// Globaler State
 const locations = ref<Location[]>([]);
 const categories = ref<Category[]>([]);
 const items = ref<Item[]>([]);
@@ -32,16 +37,16 @@ const loading = ref(false);
 
 export function useInventory() {
 
-  // 1. Alle Daten laden
+  // 1. FETCH (Mit Join auf Instanzen)
   const fetchInventory = async () => {
     try {
       loading.value = true;
       
-      // Wir laden alles parallel für maximale Geschwindigkeit
       const [locRes, catRes, itemRes] = await Promise.all([
         supabase.from('locations').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
-        supabase.from('items').select('*').order('name')
+        // WICHTIG: Wir laden die Instanzen gleich mit sortiert nach Datum
+        supabase.from('items').select('*, instances:item_instances(*)')
       ]);
 
       if (locRes.error) throw locRes.error;
@@ -50,7 +55,19 @@ export function useInventory() {
 
       locations.value = locRes.data || [];
       categories.value = catRes.data || [];
-      items.value = itemRes.data || [];
+      
+      // Instanzen innerhalb der Items sortieren (Bald ablaufende zuerst)
+      const rawItems = itemRes.data || [];
+      rawItems.forEach((item: any) => {
+        if (item.instances) {
+            item.instances.sort((a: ItemInstance, b: ItemInstance) => {
+                if (!a.expiry_date) return 1;
+                if (!b.expiry_date) return -1;
+                return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+            });
+        }
+      });
+      items.value = rawItems;
       
     } catch (error) {
       console.error('Fehler beim Laden:', error);
@@ -59,202 +76,145 @@ export function useInventory() {
     }
   };
 
-  const deleteItem = async (itemId: string) => {
-    // Optimistisch: Sofort aus der lokalen Liste entfernen
-    const index = items.value.findIndex(i => i.id === itemId);
-    const deletedItem = items.value[index]; // Backup für Fehlerfall
-    if (index !== -1) {
-      items.value.splice(index, 1);
+  // 2. ITEM ERSTELLEN (Parent + Erste Instanz)
+  const addItem = async (name: string, locationId: string, categoryId: string | null, quantity: number, expiryDate: string | null) => {
+    // A) Item Container erstellen
+    const { data: newItem, error: itemError } = await supabase
+      .from('items')
+      .insert({ name, location_id: locationId, category_id: categoryId })
+      .select()
+      .single();
+
+    if (itemError || !newItem) {
+      alert('Fehler beim Item erstellen');
+      return;
     }
 
-    // DB Request
-    const { error } = await supabase
-      .from('items')
-      .delete()
-      .eq('id', itemId);
+    // B) Erste Instanz erstellen
+    await addInstance(newItem.id, quantity, expiryDate);
+
+    // Lokal neuladen (einfachster Weg für Konsistenz)
+    await fetchInventory(); 
+  };
+
+  // 3. NEUE INSTANZ HINZUFÜGEN (Zu existierendem Item)
+  const addInstance = async (itemId: string, quantity: number, expiryDate: string | null) => {
+    const finalDate = expiryDate === '' ? null : expiryDate;
+    
+    const { data, error } = await supabase
+      .from('item_instances')
+      .insert({ item_id: itemId, quantity, expiry_date: finalDate })
+      .select()
+      .single();
 
     if (error) {
-      console.error('Löschen fehlgeschlagen:', error);
-      alert('Fehler beim Löschen!');
-      // Rollback: Item wieder einfügen
-      if (deletedItem) items.value.splice(index, 0, deletedItem);
+      console.error(error); 
+      return;
+    }
+
+    // Lokal einfügen
+    const item = items.value.find(i => i.id === itemId);
+    if (item && data) {
+      item.instances.push(data);
+      // Neu sortieren
+      item.instances.sort((a, b) => {
+          if (!a.expiry_date) return 1;
+          if (!b.expiry_date) return -1;
+          return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+      });
     }
   };
 
-  // 2. UPDATE: updateQuantity korrigieren
-  // Wir übergeben jetzt den NEUEN ABSOLUTEN WERT, nicht mehr die Differenz
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
+  // 4. UPDATE QUANTITY (Einer spezifischen Instanz)
+  const updateInstanceQuantity = async (itemId: string, instanceId: string, newQuantity: number) => {
+    const item = items.value.find(i => i.id === itemId);
+    const instance = item?.instances.find(inst => inst.id === instanceId);
+    
+    if (!instance) return;
+
+    // Optimistisch
+    const oldQty = instance.quantity;
+    instance.quantity = newQuantity;
+
+    const { error } = await supabase
+      .from('item_instances')
+      .update({ quantity: newQuantity })
+      .eq('id', instanceId);
+
+    if (error) {
+      instance.quantity = oldQty; // Rollback
+      alert('Fehler beim Speichern');
+    }
+  };
+
+  // 5. LÖSCHEN (Instanz oder ganzes Item)
+  const deleteInstance = async (itemId: string, instanceId: string) => {
     const item = items.value.find(i => i.id === itemId);
     if (!item) return;
 
-    const oldQuantity = item.quantity;
+    // Optimistisch löschen
+    const prevInstances = [...item.instances];
+    item.instances = item.instances.filter(inst => inst.id !== instanceId);
+
+    // DB Löschen
+    const { error } = await supabase.from('item_instances').delete().eq('id', instanceId);
     
-    // Optimistisches Update
-    item.quantity = newQuantity;
-
-    const { error } = await supabase
-      .from('items')
-      .update({ quantity: newQuantity })
-      .eq('id', itemId);
-
     if (error) {
-      console.error('Update fehlgeschlagen:', error);
-      item.quantity = oldQuantity; // Rollback
+        item.instances = prevInstances; // Rollback
+        return;
+    }
+
+    // Wenn das Item jetzt KEINE Instanzen mehr hat, löschen wir das Parent-Item auch
+    if (item.instances.length === 0) {
+        await supabase.from('items').delete().eq('id', itemId);
+        items.value = items.value.filter(i => i.id !== itemId);
     }
   };
 
-  // 3. Getter und Suchlogik (Fast gleich wie vorher)
-  const getLocationName = (locId: string) => {
-    return locations.value.find(l => l.id === locId)?.name || 'Unbekannt';
+  // --- Helper ---
+  const addLocation = async (name: string, icon: string) => { /* ... wie vorher ... */ 
+      const { data } = await supabase.from('locations').insert({name, icon}).select().single();
+      if(data) locations.value.push(data);
+  };
+  
+  const addCategory = async (name: string, locationId: string) => { /* ... wie vorher ... */
+      const { data } = await supabase.from('categories').insert({name, location_id: locationId}).select().single();
+      if(data) { categories.value.push(data); return data; }
   };
 
-  const getItemsByLocation = (locId: string) => {
-    return computed(() => {
+  const deleteCategory = async (catId: string) => { /* ... wie vorher ... */
+      // Check muss angepasst werden: Item hat keine category_id mehr direkt (doch hat es, siehe Interface)
+      // Aber Check ob Item existiert ist gleich
+      const hasItems = items.value.some(i => i.category_id === catId);
+      if(hasItems) { alert('Kategorie nicht leer!'); return false; }
+      await supabase.from('categories').delete().eq('id', catId);
+      categories.value = categories.value.filter(c => c.id !== catId);
+      return true;
+  };
+
+  // Getter (Filterlogik fast identisch, nur quantity berechnung anders)
+  const getLocationName = (locId: string) => locations.value.find(l => l.id === locId)?.name || '';
+
+  const getItemsByLocation = (locId: string) => computed(() => {
       const locItems = items.value.filter(i => i.location_id === locId);
-      
-      // Items ohne Kategorie
       const uncategorized = locItems.filter(i => !i.category_id);
-      
-      // Items gruppiert nach Kategorie
       const locCategories = categories.value.filter(c => c.location_id === locId);
       const grouped = locCategories.map(cat => ({
         ...cat,
         items: locItems.filter(i => i.category_id === cat.id)
       })).filter(group => group.items.length > 0);
-
       return { uncategorized, grouped };
-    });
-  };
+  });
 
   const searchItems = (query: string) => {
     if (!query) return [];
-    const lowerQuery = query.toLowerCase();
-    return items.value.filter(i => i.name.toLowerCase().includes(lowerQuery));
-  };
-
-  const addLocation = async (name: string, icon: string) => {
-    // 1. Validierung
-    if (!name.trim()) return;
-
-    // 2. An DB senden
-    const { data, error } = await supabase
-      .from('locations')
-      .insert({ name, icon }) // user_id wird automatisch durch Supabase gesetzt
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Fehler beim Erstellen:', error);
-      alert('Konnte Ort nicht erstellen.');
-      return;
-    }
-
-    // 3. Lokalen State aktualisieren (damit es sofort sichtbar ist)
-    if (data) {
-      locations.value.push(data);
-    }
-  };
-
-  const addCategory = async (name: string, locationId: string) => {
-    const { data, error } = await supabase
-      .from('categories')
-      .insert({ name, location_id: locationId })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Fehler beim Erstellen der Kategorie:', error);
-      throw error;
-    }
-
-    if (data) {
-      categories.value.push(data); // Lokal hinzufügen
-      return data;
-    }
-  };
-
-  const deleteCategory = async (categoryId: string) => {
-    // 1. Prüfen: Gibt es Items in dieser Kategorie?
-    // Wir schauen in unser lokales Array, das ist am schnellsten.
-    const hasItems = items.value.some(i => i.category_id === categoryId);
-    
-    if (hasItems) {
-      alert('Diese Kategorie ist nicht leer! Bitte erst die Artikel löschen oder verschieben.');
-      return false; // Fehler
-    }
-
-    // 2. Bestätigung
-    if (!confirm('Kategorie wirklich löschen?')) return false;
-
-    // 3. Optimistisch löschen (Lokal)
-    const prevCats = [...categories.value];
-    categories.value = categories.value.filter(c => c.id !== categoryId);
-
-    // 4. DB Request
-    const { error } = await supabase
-      .from('categories')
-      .delete()
-      .eq('id', categoryId);
-
-    if (error) {
-      console.error('Fehler beim Löschen der Kategorie:', error);
-      alert('Fehler beim Löschen.');
-      categories.value = prevCats; // Rollback
-      return false;
-    }
-    
-    return true; // Erfolg
-  };
-
-  // NEU: Item mit Anzahl und Ablaufdatum erstellen
-  const addItem = async (
-    name: string, 
-    locationId: string, 
-    categoryId: string | null,
-    quantity: number,      // Neuer Parameter
-    expiryDate: string | null // Neuer Parameter
-  ) => {
-    
-    // Leeren String zu null umwandeln für die DB
-    const finalDate = expiryDate === '' ? null : expiryDate;
-
-    const { data, error } = await supabase
-      .from('items')
-      .insert({ 
-        name, 
-        location_id: locationId, 
-        category_id: categoryId,
-        quantity: quantity,     // Wert aus Parameter nutzen
-        expiry_date: finalDate  // Wert aus Parameter nutzen
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Fehler beim Erstellen des Artikels:', error);
-      alert('Konnte Artikel nicht speichern.');
-      return;
-    }
-
-    if (data) {
-      items.value.push(data);
-    }
+    return items.value.filter(i => i.name.toLowerCase().includes(query.toLowerCase()));
   };
 
   return {
-    categories,
-    locations,
-    items,
-    loading,
-    fetchInventory,
-    updateQuantity,
-    getItemsByLocation,
-    searchItems,
-    getLocationName,
-    addLocation,
-    addItem,
-    addCategory,
-    deleteCategory,
-    deleteItem
+    locations, items, categories, loading,
+    fetchInventory, addLocation, addCategory, deleteCategory, addItem, 
+    addInstance, updateInstanceQuantity, deleteInstance, // <-- Neue Actions
+    getItemsByLocation, searchItems, getLocationName
   };
 }

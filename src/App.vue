@@ -46,7 +46,7 @@ const currentLocationData = computed(() => {
 
 // 2. Daten für "Alle Produkte" (Sortiert & Gefiltert)
 const allItemsFiltered = computed(() => {
-  // A) Filtern (Suche)
+  // A) Filtern
   let result = items.value.filter(i => 
     i.name.toLowerCase().includes(globalSearchQuery.value.toLowerCase())
   );
@@ -56,10 +56,16 @@ const allItemsFiltered = computed(() => {
     if (sortBy.value === 'name') {
       return a.name.localeCompare(b.name);
     } else {
-      // Datum Sortierung (Items ohne Datum nach hinten)
-      if (!a.expiry_date) return 1;
-      if (!b.expiry_date) return -1;
-      return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+      // Datum: Wir nehmen jeweils das FRÜHESTE Datum aller Instanzen
+      // Wenn ein Item gar keine Instanzen hat (sollte nicht passieren), kommts nach hinten
+      const getEarliest = (item: any) => {
+         if (!item.instances || item.instances.length === 0) return 9999999999999;
+         // Instanzen sind durch fetchInventory schon sortiert -> das erste ist das früheste
+         const firstDate = item.instances[0].expiry_date;
+         return firstDate ? new Date(firstDate).getTime() : 9999999999999;
+      };
+
+      return getEarliest(a) - getEarliest(b);
     }
   });
 });
