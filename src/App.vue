@@ -1,50 +1,75 @@
 <script setup lang="ts">
-import { ref, computed, watchEffect } from 'vue';
+import { ref, computed, watchEffect, nextTick } from 'vue';
 import { useAuth } from './composables/useAuth';
 import { useInventory, type Location } from './composables/useInventory';
-import ItemRow from './components/ItemRow.vue'; // Stelle sicher, dass diese Datei existiert!
+import ItemRow from './components/ItemRow.vue';
 
-// Auth & Data Logic
+// --- Auth & Data Logic ---
 const { user, signUp, signIn, signOut } = useAuth();
 const { 
   locations, 
+  items, // Wir brauchen direkten Zugriff auf alle Items
   categories,
   fetchInventory, 
   getItemsByLocation, 
-  searchItems, 
   loading: dataLoading,
   addLocation,
-  addItem,
-  addCategory
+  addCategory,
+  addItem
 } = useInventory();
 
-// Auth Form State
+// --- Auth Form State ---
 const email = ref('');
 const password = ref('');
 const isLoginMode = ref(true);
 const authLoading = ref(false);
 
-// App State
-const currentView = ref<'dashboard' | 'location' | 'search'>('dashboard');
+// --- Navigation State ---
+// 'dashboard' = Kacheln, 'allItems' = Liste aller Produkte, 'location' = Einzelansicht
+const currentView = ref<'dashboard' | 'allItems' | 'location'>('dashboard'); 
 const selectedLocation = ref<Location | null>(null);
-const searchQuery = ref('');
+const drawerOpen = ref(false); // Steuert die Sidebar
 
-// Computed Data
+// --- "Alle Produkte" View State ---
+const globalSearchQuery = ref('');
+const sortBy = ref<'name' | 'date'>('name');
+const searchInputRef = ref<HTMLInputElement | null>(null);
+
+// --- Computed Data ---
+
+// 1. Daten für Einzelansicht (Ort)
 const currentLocationData = computed(() => {
   if (!selectedLocation.value) return null;
   return getItemsByLocation(selectedLocation.value.id).value;
 });
 
-const searchResults = computed(() => searchItems(searchQuery.value));
+// 2. Daten für "Alle Produkte" (Sortiert & Gefiltert)
+const allItemsFiltered = computed(() => {
+  // A) Filtern (Suche)
+  let result = items.value.filter(i => 
+    i.name.toLowerCase().includes(globalSearchQuery.value.toLowerCase())
+  );
 
-// --- WICHTIG: Daten laden, sobald User da ist ---
-watchEffect(() => {
-  if (user.value) {
-    fetchInventory(); // Lade Daten aus Supabase
-  }
+  // B) Sortieren
+  return result.sort((a, b) => {
+    if (sortBy.value === 'name') {
+      return a.name.localeCompare(b.name);
+    } else {
+      // Datum Sortierung (Items ohne Datum nach hinten)
+      if (!a.expiry_date) return 1;
+      if (!b.expiry_date) return -1;
+      return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+    }
+  });
 });
 
-// Actions
+// --- Lifecycle & Watchers ---
+watchEffect(() => {
+  if (user.value) fetchInventory();
+});
+
+// --- Actions ---
+
 const handleAuth = async () => {
   authLoading.value = true;
   try {
@@ -57,101 +82,87 @@ const handleAuth = async () => {
   }
 };
 
+const handleSignOut = async () => {
+  await signOut();
+  drawerOpen.value = false;
+};
+
+// Navigation Helpers
 const openLocation = (loc: Location) => {
   selectedLocation.value = loc;
   currentView.value = 'location';
 };
 
-const goHome = () => {
-  currentView.value = 'dashboard';
+const navigateTo = (view: 'dashboard' | 'allItems') => {
+  currentView.value = view;
   selectedLocation.value = null;
-  searchQuery.value = '';
-};
-
-// --- NEU: Modal Logik ---
-const newLocName = ref('');
-const newLocIcon = ref('📦'); // Standard Icon
-const addLocationDialog = ref<HTMLDialogElement | null>(null); // Referenz zum HTML Element
-
-// Eine Auswahl passender Icons für den Haushalt
-const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🚪', '🍎', '🥩', '🧊', '🧺'];
-
-const openAddLocationModal = () => {
-  newLocName.value = '';
-  newLocIcon.value = '📦';
-  addLocationDialog.value?.showModal(); // DaisyUI/Native Dialog öffnen
-};
-
-const saveNewLocation = async () => {
-  if (!newLocName.value) return;
+  drawerOpen.value = false; // Sidebar schließen bei Klick
   
-  await addLocation(newLocName.value, newLocIcon.value);
-  
-  addLocationDialog.value?.close(); // Dialog schließen
+  // Reset Search bei Dashboard, aber behalten bei AllItems
+  if (view === 'dashboard') {
+    globalSearchQuery.value = '';
+  }
 };
 
-// --- NEU: Item Modal State ---
+const goToSearch = async () => {
+  navigateTo('allItems');
+  // Fokus auf das Suchfeld setzen (nach DOM Update)
+  await nextTick();
+  searchInputRef.value?.focus();
+};
+
+// --- Modal Logic (Hinzufügen) ---
+// (Hier übernehmen wir die Refs und Funktionen vom vorherigen Schritt)
+const addLocationDialog = ref<HTMLDialogElement | null>(null);
 const addItemDialog = ref<HTMLDialogElement | null>(null);
+const newLocName = ref('');
+const newLocIcon = ref('📦');
 const newItemName = ref('');
-const selectedCategoryId = ref<string | null>(null); // ID der gewählten Kategorie
-const newCategoryName = ref(''); // Text für neue Kategorie
-
-// State für das Modal erweitern
-const newItemQuantity = ref(1);       // Standard: 1
+const newItemQuantity = ref(1);
 const newItemExpiry = ref('');
+const selectedCategoryId = ref<string | null>(null);
+const newCategoryName = ref('');
+const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🥖', '🍎', '🥩', '🧊', '🧺'];
 
-// Computed: Verfügbare Kategorien NUR für den aktuellen Ort
+// Computed für Modal
 const currentLocationCategories = computed(() => {
   if (!selectedLocation.value) return [];
   return categories.value.filter(c => c.location_id === selectedLocation.value!.id);
 });
 
+// Modal Funktionen
+const openAddLocationModal = () => {
+  newLocName.value = '';
+  newLocIcon.value = '📦';
+  addLocationDialog.value?.showModal();
+};
+const saveNewLocation = async () => {
+  if (!newLocName.value) return;
+  await addLocation(newLocName.value, newLocIcon.value);
+  addLocationDialog.value?.close();
+};
 const openAddItemModal = () => {
   newItemName.value = '';
-  selectedCategoryId.value = null;
-  newCategoryName.value = '';
-  
-  // Neue Felder resetten
   newItemQuantity.value = 1;
   newItemExpiry.value = '';
-  
+  selectedCategoryId.value = null;
+  newCategoryName.value = '';
   addItemDialog.value?.showModal();
 };
+const onCategorySelect = (id: string) => { selectedCategoryId.value = id; newCategoryName.value = ''; };
+const onNewCategoryInput = () => { if (newCategoryName.value) selectedCategoryId.value = null; };
 
 const saveNewItem = async () => {
   if (!newItemName.value || !selectedLocation.value) return;
-
   try {
     let finalCategoryId = selectedCategoryId.value;
-
     if (newCategoryName.value.trim()) {
       const newCat = await addCategory(newCategoryName.value, selectedLocation.value.id);
       if (newCat) finalCategoryId = newCat.id;
     }
-
-    // HIER IST DAS UPDATE: quantity und expiry übergeben
-    await addItem(
-      newItemName.value, 
-      selectedLocation.value.id, 
-      finalCategoryId,
-      newItemQuantity.value,
-      newItemExpiry.value
-    );
-
+    await addItem(newItemName.value, selectedLocation.value.id, finalCategoryId, newItemQuantity.value, newItemExpiry.value);
     addItemDialog.value?.close();
-  } catch (e) {
-    alert('Fehler beim Speichern');
-  }
-};
-
-// UX-Helper: Wenn man im Textfeld tippt, Auswahl des Chips aufheben
-const onNewCategoryInput = () => {
-  if (newCategoryName.value) selectedCategoryId.value = null;
-};
-// UX-Helper: Wenn man Chip klickt, Textfeld leeren
-const onCategorySelect = (id: string) => {
-  selectedCategoryId.value = id;
-  newCategoryName.value = '';
+  } catch (e) { alert('Fehler beim Speichern'); }
 };
 </script>
 
@@ -174,158 +185,194 @@ const onCategorySelect = (id: string) => {
     </div>
   </div>
 
-  <div v-else class="min-h-screen bg-base-200"> <div class="navbar bg-base-100 shadow-sm sticky top-0 z-10">
-      <div class="flex-1">
-        <button 
-          v-if="currentView === 'location'" 
-          @click="goHome" 
-          class="btn btn-ghost btn-circle mr-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-        </button>
+  <div v-else class="drawer">
+    <input id="main-drawer" type="checkbox" class="drawer-toggle" v-model="drawerOpen" />
+    
+    <div class="drawer-content flex flex-col min-h-screen bg-base-200">
+      
+      <div class="navbar bg-base-100 shadow-sm sticky top-0 z-10">
+        <div class="flex-none">
+          <button v-if="currentView === 'location'" @click="navigateTo('dashboard')" class="btn btn-square btn-ghost">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          
+          <label v-else for="main-drawer" class="btn btn-square btn-ghost drawer-button">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+          </label>
+        </div>
         
-        <span class="font-bold text-lg truncate">
-          {{ currentView === 'dashboard' ? 'Mein Vorrat' : (selectedLocation?.name || 'Suche') }}
-        </span>
-      </div>
-      
-      <div class="flex-none gap-2">
-        <button 
-          v-if="currentView !== 'search'" 
-          class="btn btn-ghost btn-circle" 
-          @click="currentView = 'search'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-        </button>
-
-        <button class="btn btn-ghost btn-circle" @click="signOut">
-           <span class="text-xl">🚪</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="p-4 container mx-auto max-w-md">
-      
-      <div v-if="dataLoading" class="flex justify-center mt-10">
-        <span class="loading loading-spinner loading-lg"></span>
-      </div>
-
-      <div v-else-if="currentView === 'dashboard'" class="grid grid-cols-2 gap-4">
-        <div v-for="loc in locations" :key="loc.id" @click="openLocation(loc)"
-          class="card bg-base-100 shadow-md hover:shadow-lg cursor-pointer active:scale-95 transition-transform">
-          <div class="card-body items-center text-center p-6">
-            <div class="text-4xl mb-2">{{ loc.icon || '📦' }}</div>
-            <h2 class="card-title text-base">{{ loc.name }}</h2>
-          </div>
+        <div class="flex-1">
+          <span class="btn btn-ghost normal-case text-xl truncate">
+            {{ currentView === 'dashboard' ? 'Mein Vorrat' : (currentView === 'allItems' ? 'Alle Produkte' : selectedLocation?.name) }}
+          </span>
         </div>
-        <button 
-          @click="openAddLocationModal"
-          class="card border-2 border-dashed border-base-300 bg-base-100/50 hover:bg-base-100 hover:border-primary transition-colors flex items-center justify-center p-6 cursor-pointer h-full min-h-[140px]"
-        >
-          <div class="text-center text-base-content/60">
-            <div class="text-3xl mb-1">+</div>
-            <div class="font-medium">Ort hinzufügen</div>
-          </div>
-        </button>
-      </div>
-
-      <div v-else-if="currentView === 'location' && currentLocationData">
-        <div v-if="currentLocationData.uncategorized.length > 0" class="card bg-base-100 shadow-sm mb-4 overflow-hidden">
-          <ItemRow v-for="item in currentLocationData.uncategorized" :key="item.id" :item="item" />
-        </div>
-        <div v-for="group in currentLocationData.grouped" :key="group.id" class="mb-4">
-          <h3 class="font-bold text-sm uppercase text-gray-500 ml-2 mb-2">{{ group.name }}</h3>
-          <div class="card bg-base-100 shadow-sm overflow-hidden">
-            <ItemRow v-for="item in group.items" :key="item.id" :item="item" />
-          </div>
-        </div>
-        <div v-if="currentLocationData.uncategorized.length === 0 && currentLocationData.grouped.length === 0" class="text-center opacity-50 mt-10">
-          Dieser Ort ist leer.
-        </div>
-        <div class="fixed bottom-6 right-6 z-20">
-          <button @click="openAddItemModal" class="btn btn-circle btn-primary btn-lg shadow-xl">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
+        
+        <div class="flex-none">
+          <button v-if="currentView !== 'allItems'" class="btn btn-ghost btn-circle" @click="goToSearch">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </button>
         </div>
       </div>
 
-    </div>
-
-     <div v-if="currentView === 'search'" class="fixed inset-0 bg-base-200 z-20 p-4 pt-20">
-        <div class="flex gap-2 mb-4">
-           <button @click="goHome" class="btn btn-square bg-base-100 shadow-sm">✕</button>
-           <input v-model="searchQuery" class="input input-bordered w-full shadow-sm" placeholder="Produkt suchen..." autofocus />
+      <div class="p-4 container mx-auto max-w-md flex-grow">
+        
+        <div v-if="dataLoading" class="flex justify-center mt-10">
+          <span class="loading loading-spinner loading-lg"></span>
         </div>
-        <div class="card bg-base-100 shadow-sm overflow-y-auto max-h-[80vh]">
-           <ItemRow v-for="item in searchResults" :key="item.id" :item="item" :show-location="true" />
-           <div v-if="searchQuery && searchResults.length === 0" class="p-4 text-center opacity-50">
-             Nichts gefunden.
+
+        <div v-else-if="currentView === 'dashboard'" class="grid grid-cols-2 gap-4">
+          <div v-for="loc in locations" :key="loc.id" @click="openLocation(loc)"
+            class="card bg-base-100 shadow-md hover:shadow-lg cursor-pointer active:scale-95 transition-transform">
+            <div class="card-body items-center text-center p-6">
+              <div class="text-4xl mb-2">{{ loc.icon || '📦' }}</div>
+              <h2 class="card-title text-base">{{ loc.name }}</h2>
+            </div>
+          </div>
+          <button @click="openAddLocationModal" class="card border-2 border-dashed border-base-300 bg-base-100/50 hover:bg-base-100 flex items-center justify-center p-6 cursor-pointer h-full min-h-[140px]">
+            <div class="text-center text-base-content/60">
+              <div class="text-3xl mb-1">+</div>
+              <div class="font-medium">Ort hinzufügen</div>
+            </div>
+          </button>
+        </div>
+
+        <div v-else-if="currentView === 'location' && currentLocationData">
+           <div v-if="currentLocationData.uncategorized.length > 0" class="card bg-base-100 shadow-sm mb-4 overflow-hidden">
+             <ItemRow v-for="item in currentLocationData.uncategorized" :key="item.id" :item="item" />
+           </div>
+           <div v-for="group in currentLocationData.grouped" :key="group.id" class="mb-4">
+             <h3 class="font-bold text-sm uppercase text-gray-500 ml-2 mb-2">{{ group.name }}</h3>
+             <div class="card bg-base-100 shadow-sm overflow-hidden">
+               <ItemRow v-for="item in group.items" :key="item.id" :item="item" />
+             </div>
+           </div>
+           <div v-if="currentLocationData.uncategorized.length === 0 && currentLocationData.grouped.length === 0" class="text-center opacity-50 mt-10">Dieser Ort ist leer.</div>
+           
+           <div class="fixed bottom-6 right-6 z-20">
+             <button @click="openAddItemModal" class="btn btn-circle btn-primary btn-lg shadow-xl">
+               <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+             </button>
            </div>
         </div>
-     </div>
 
-    <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
-        <div class="modal-box">
-            <h3 class="font-bold text-lg mb-4">Neuen Ort erstellen</h3>
-            <div class="form-control w-full mb-4">
-            <label class="label"><span class="label-text">Name des Ortes</span></label>
-            <input v-model="newLocName" type="text" placeholder="z.B. Vorratskammer" class="input input-bordered w-full" @keyup.enter="saveNewLocation"/>
+        <div v-else-if="currentView === 'allItems'">
+          
+          <div class="flex flex-col gap-3 mb-6">
+            <input 
+              ref="searchInputRef"
+              v-model="globalSearchQuery" 
+              type="text" 
+              placeholder="Alle Produkte durchsuchen..." 
+              class="input input-bordered w-full shadow-sm"
+            />
+            
+            <div class="flex gap-2">
+              <button 
+                @click="sortBy = 'name'" 
+                class="btn btn-sm flex-1"
+                :class="sortBy === 'name' ? 'btn-primary' : 'btn-outline border-base-300'"
+              >
+                A-Z
+              </button>
+              <button 
+                @click="sortBy = 'date'" 
+                class="btn btn-sm flex-1"
+                :class="sortBy === 'date' ? 'btn-primary' : 'btn-outline border-base-300'"
+              >
+                📅 Ablaufdatum
+              </button>
             </div>
-            <div class="form-control w-full mb-6">
-            <label class="label"><span class="label-text">Wähle ein Icon</span></label>
-            <div class="grid grid-cols-6 gap-2">
-                <button v-for="icon in availableIcons" :key="icon" @click="newLocIcon = icon" class="btn btn-square text-xl" :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'" type="button">{{ icon }}</button>
+          </div>
+
+          <div class="card bg-base-100 shadow-sm overflow-hidden">
+            <ItemRow 
+              v-for="item in allItemsFiltered" 
+              :key="item.id" 
+              :item="item" 
+              :show-location="true" 
+            />
+            <div v-if="allItemsFiltered.length === 0" class="p-8 text-center opacity-50">
+              {{ globalSearchQuery ? 'Keine Treffer.' : 'Keine Produkte vorhanden.' }}
             </div>
-            </div>
-            <div class="modal-action">
+          </div>
+
+        </div>
+
+      </div>
+    </div> 
+    <div class="drawer-side z-20">
+      <label for="main-drawer" class="drawer-overlay"></label>
+      <ul class="menu p-4 w-80 min-h-full bg-base-100 text-base-content flex flex-col">
+        <li class="mb-4 font-bold text-xl px-4 py-2 bg-base-200 rounded-lg">
+          Mein Vorrat
+        </li>
+        
+        <li>
+          <a @click="navigateTo('dashboard')" :class="{active: currentView === 'dashboard' || currentView === 'location'}">
+            📦 Orte / Dashboard
+          </a>
+        </li>
+        <li>
+          <a @click="navigateTo('allItems')" :class="{active: currentView === 'allItems'}">
+            🔍 Alle Produkte
+          </a>
+        </li>
+
+        <div class="divider"></div>
+
+        <li class="mt-auto">
+          <a @click="handleSignOut" class="text-error">
+            🚪 Abmelden
+          </a>
+        </li>
+        <li class="text-xs text-center mt-2 opacity-50">
+          User: {{ user?.email }}
+        </li>
+      </ul>
+    </div>
+
+  </div> <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
+      <div class="modal-box">
+          <h3 class="font-bold text-lg mb-4">Neuen Ort erstellen</h3>
+          <div class="form-control w-full mb-4">
+            <input v-model="newLocName" type="text" placeholder="Name" class="input input-bordered w-full" @keyup.enter="saveNewLocation"/>
+          </div>
+          <div class="grid grid-cols-6 gap-2 mb-6">
+            <button v-for="icon in availableIcons" :key="icon" @click="newLocIcon = icon" class="btn btn-square text-xl" :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'" type="button">{{ icon }}</button>
+          </div>
+          <div class="modal-action">
             <form method="dialog"><button class="btn btn-ghost mr-2">Abbrechen</button></form>
             <button @click="saveNewLocation" class="btn btn-primary">Erstellen</button>
-            </div>
-        </div>
-    </dialog>
+          </div>
+      </div>
+  </dialog>
 
-    <dialog ref="addItemDialog" class="modal modal-bottom sm:modal-middle">
-        <div class="modal-box">
-            <h3 class="font-bold text-lg mb-4">Neues Produkt in {{ selectedLocation?.name }}</h3>
-            <div class="form-control w-full mb-2">
-                <label class="label"><span class="label-text font-bold">Produktname</span></label>
-                <input v-model="newItemName" type="text" placeholder="z.B. Fischstäbchen" class="input input-bordered w-full" autofocus @keyup.enter="saveNewItem"/>
-            </div>
-            <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="form-control">
-                <label class="label"><span class="label-text font-bold">Anzahl</span></label>
-                <div class="join">
-                <button @click="newItemQuantity > 1 ? newItemQuantity-- : null" class="btn btn-sm join-item">-</button>
-                <input v-model="newItemQuantity" type="number" min="1" class="input input-bordered input-sm join-item w-full text-center" />
-                <button @click="newItemQuantity++" class="btn btn-sm join-item">+</button>
-                </div>
-            </div>
-            <div class="form-control">
-                <label class="label"><span class="label-text font-bold">Ablaufdatum</span></label>
-                <input v-model="newItemExpiry" type="date" class="input input-bordered input-sm w-full" />
-            </div>
-            </div>
-            <div class="form-control w-full mb-2">
-            <label class="label"><span class="label-text font-bold">Kategorie (Optional)</span></label>
+  <dialog ref="addItemDialog" class="modal modal-bottom sm:modal-middle">
+      <div class="modal-box">
+          <h3 class="font-bold text-lg mb-4">Neues Produkt</h3>
+          <div class="form-control w-full mb-2">
+              <label class="label"><span class="label-text font-bold">Name</span></label>
+              <input v-model="newItemName" type="text" placeholder="z.B. Milch" class="input input-bordered w-full" autofocus @keyup.enter="saveNewItem"/>
+          </div>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+             <div class="form-control">
+               <label class="label"><span class="label-text font-bold">Anzahl</span></label>
+               <div class="join"><button @click="newItemQuantity > 1 ? newItemQuantity-- : null" class="btn btn-sm join-item">-</button><input v-model="newItemQuantity" type="number" class="input input-bordered input-sm join-item w-full text-center" /><button @click="newItemQuantity++" class="btn btn-sm join-item">+</button></div>
+             </div>
+             <div class="form-control"><label class="label"><span class="label-text font-bold">Ablauf</span></label><input v-model="newItemExpiry" type="date" class="input input-bordered input-sm w-full" /></div>
+          </div>
+          <div class="form-control w-full mb-2">
+            <label class="label"><span class="label-text font-bold">Kategorie</span></label>
             <div v-if="currentLocationCategories.length > 0" class="flex flex-wrap gap-2 mb-3">
-                <button v-for="cat in currentLocationCategories" :key="cat.id" @click="onCategorySelect(cat.id)" class="btn btn-sm normal-case" :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'">{{ cat.name }}</button>
+               <button v-for="cat in currentLocationCategories" :key="cat.id" @click="onCategorySelect(cat.id)" class="btn btn-sm" :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'">{{ cat.name }}</button>
             </div>
             <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
-                <input type="checkbox" :checked="!!newCategoryName" /> 
-                <div class="collapse-title text-sm font-medium text-gray-500">Oder neue Kategorie erstellen...</div>
-                <div class="collapse-content">
-                <input v-model="newCategoryName" @input="onNewCategoryInput" type="text" placeholder="Neue Kategorie benennen" class="input input-bordered input-sm w-full mt-2" />
-                </div>
+               <input type="checkbox" :checked="!!newCategoryName" /> 
+               <div class="collapse-title text-sm text-gray-500">Oder neu...</div>
+               <div class="collapse-content"><input v-model="newCategoryName" @input="onNewCategoryInput" type="text" class="input input-bordered input-sm w-full mt-2" /></div>
             </div>
-            </div>
-            <div class="modal-action">
-            <form method="dialog"><button class="btn btn-ghost mr-2">Abbrechen</button></form>
-            <button @click="saveNewItem" class="btn btn-primary" :disabled="!newItemName">Speichern</button>
-            </div>
-        </div>
-    </dialog>
-
-  </div>
+          </div>
+          <div class="modal-action"><form method="dialog"><button class="btn btn-ghost mr-2">Abbrechen</button></form><button @click="saveNewItem" class="btn btn-primary" :disabled="!newItemName">Speichern</button></div>
+      </div>
+  </dialog>
 </template>
