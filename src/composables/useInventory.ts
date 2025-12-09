@@ -265,11 +265,36 @@ export function useInventory() {
     }
   };
 
+  const updateItem = async (itemId: string, newName: string, newCategoryId: string | null) => {
+    const item = items.value.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Optimistisches Update
+    const oldName = item.name;
+    const oldCat = item.category_id;
+
+    item.name = newName;
+    item.category_id = newCategoryId;
+
+    const { error } = await supabase
+      .from('items')
+      .update({ name: newName, category_id: newCategoryId })
+      .eq('id', itemId);
+
+    if (error) {
+      console.error('Update fehlgeschlagen:', error);
+      alert('Konnte Item nicht aktualisieren.');
+      // Rollback
+      item.name = oldName;
+      item.category_id = oldCat;
+    }
+  };
+
   return {
     locations, items, categories, loading,
     fetchInventory, addLocation, addCategory, deleteCategory, addItem, 
     addInstance, updateInstanceQuantity, deleteInstance, // <-- Neue Actions
     getItemsByLocation, searchItems, getLocationName,
-    updateLocation, deleteLocation
+    updateLocation, deleteLocation, updateItem
   };
 }
