@@ -174,18 +174,30 @@ const onCategorySelect = (id: string) => {
     </div>
   </div>
 
-  <div v-else class="min-h-screen bg-base-200 pb-20">
-    
-    <div class="navbar bg-base-100 shadow-sm sticky top-0 z-10">
+  <div v-else class="min-h-screen bg-base-200"> <div class="navbar bg-base-100 shadow-sm sticky top-0 z-10">
       <div class="flex-1">
-        <button v-if="currentView !== 'dashboard'" @click="goHome" class="btn btn-ghost btn-circle mr-2">
-           <span class="text-xl">←</span>
+        <button 
+          v-if="currentView === 'location'" 
+          @click="goHome" 
+          class="btn btn-ghost btn-circle mr-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
         </button>
+        
         <span class="font-bold text-lg truncate">
           {{ currentView === 'dashboard' ? 'Mein Vorrat' : (selectedLocation?.name || 'Suche') }}
         </span>
       </div>
-      <div class="flex-none">
+      
+      <div class="flex-none gap-2">
+        <button 
+          v-if="currentView !== 'search'" 
+          class="btn btn-ghost btn-circle" 
+          @click="currentView = 'search'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </button>
+
         <button class="btn btn-ghost btn-circle" @click="signOut">
            <span class="text-xl">🚪</span>
         </button>
@@ -218,18 +230,18 @@ const onCategorySelect = (id: string) => {
       </div>
 
       <div v-else-if="currentView === 'location' && currentLocationData">
-        <div v-if="currentLocationData.uncategorized.length > 0" class="card bg-base-100 shadow-sm mb-4">
+        <div v-if="currentLocationData.uncategorized.length > 0" class="card bg-base-100 shadow-sm mb-4 overflow-hidden">
           <ItemRow v-for="item in currentLocationData.uncategorized" :key="item.id" :item="item" />
         </div>
         <div v-for="group in currentLocationData.grouped" :key="group.id" class="mb-4">
           <h3 class="font-bold text-sm uppercase text-gray-500 ml-2 mb-2">{{ group.name }}</h3>
-          <div class="card bg-base-100 shadow-sm">
+          <div class="card bg-base-100 shadow-sm overflow-hidden">
             <ItemRow v-for="item in group.items" :key="item.id" :item="item" />
           </div>
         </div>
         <div v-if="currentLocationData.uncategorized.length === 0 && currentLocationData.grouped.length === 0" class="text-center opacity-50 mt-10">
           Dieser Ort ist leer.
-        </div>        
+        </div>
         <div class="fixed bottom-6 right-6 z-20">
           <button @click="openAddItemModal" class="btn btn-circle btn-primary btn-lg shadow-xl">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -243,144 +255,77 @@ const onCategorySelect = (id: string) => {
 
      <div v-if="currentView === 'search'" class="fixed inset-0 bg-base-200 z-20 p-4 pt-20">
         <div class="flex gap-2 mb-4">
-           <button @click="goHome" class="btn btn-square">✕</button>
-           <input v-model="searchQuery" class="input input-bordered w-full" placeholder="Suchen..." autofocus />
+           <button @click="goHome" class="btn btn-square bg-base-100 shadow-sm">✕</button>
+           <input v-model="searchQuery" class="input input-bordered w-full shadow-sm" placeholder="Produkt suchen..." autofocus />
         </div>
         <div class="card bg-base-100 shadow-sm overflow-y-auto max-h-[80vh]">
            <ItemRow v-for="item in searchResults" :key="item.id" :item="item" :show-location="true" />
+           <div v-if="searchQuery && searchResults.length === 0" class="p-4 text-center opacity-50">
+             Nichts gefunden.
+           </div>
         </div>
      </div>
 
-     <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-4">Neuen Ort erstellen</h3>
-        
-        <div class="form-control w-full mb-4">
-          <label class="label">
-            <span class="label-text">Name des Ortes</span>
-          </label>
-          <input 
-            v-model="newLocName" 
-            type="text" 
-            placeholder="z.B. Vorratskammer" 
-            class="input input-bordered w-full" 
-            @keyup.enter="saveNewLocation"
-          />
+    <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Neuen Ort erstellen</h3>
+            <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text">Name des Ortes</span></label>
+            <input v-model="newLocName" type="text" placeholder="z.B. Vorratskammer" class="input input-bordered w-full" @keyup.enter="saveNewLocation"/>
+            </div>
+            <div class="form-control w-full mb-6">
+            <label class="label"><span class="label-text">Wähle ein Icon</span></label>
+            <div class="grid grid-cols-6 gap-2">
+                <button v-for="icon in availableIcons" :key="icon" @click="newLocIcon = icon" class="btn btn-square text-xl" :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'" type="button">{{ icon }}</button>
+            </div>
+            </div>
+            <div class="modal-action">
+            <form method="dialog"><button class="btn btn-ghost mr-2">Abbrechen</button></form>
+            <button @click="saveNewLocation" class="btn btn-primary">Erstellen</button>
+            </div>
         </div>
-
-        <div class="form-control w-full mb-6">
-          <label class="label">
-            <span class="label-text">Wähle ein Icon</span>
-          </label>
-          <div class="grid grid-cols-6 gap-2">
-            <button 
-              v-for="icon in availableIcons" 
-              :key="icon"
-              @click="newLocIcon = icon"
-              class="btn btn-square text-xl"
-              :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'"
-              type="button"
-            >
-              {{ icon }}
-            </button>
-          </div>
-        </div>
-
-        <div class="modal-action">
-          <form method="dialog">
-            <button class="btn btn-ghost mr-2">Abbrechen</button>
-          </form>
-          <button @click="saveNewLocation" class="btn btn-primary">Erstellen</button>
-        </div>
-      </div>
     </dialog>
 
     <dialog ref="addItemDialog" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-4">Neues Produkt in {{ selectedLocation?.name }}</h3>
-        
-        <div class="form-control w-full mb-4">
-          <label class="label"><span class="label-text font-bold">Produktname</span></label>
-          <input 
-            v-model="newItemName" 
-            type="text" 
-            placeholder="z.B. Fischstäbchen" 
-            class="input input-bordered w-full" 
-            autofocus
-            @keyup.enter="saveNewItem"
-          />
-        </div>
-
-        <div class="form-control w-full mb-2">
-           </div>
-
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          
-          <div class="form-control">
-            <label class="label"><span class="label-text font-bold">Anzahl</span></label>
-            <div class="join">
-              <button @click="newItemQuantity > 1 ? newItemQuantity-- : null" class="btn btn-sm join-item">-</button>
-              <input 
-                v-model="newItemQuantity" 
-                type="number" 
-                min="1" 
-                class="input input-bordered input-sm join-item w-full text-center" 
-              />
-              <button @click="newItemQuantity++" class="btn btn-sm join-item">+</button>
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Neues Produkt in {{ selectedLocation?.name }}</h3>
+            <div class="form-control w-full mb-2">
+                <label class="label"><span class="label-text font-bold">Produktname</span></label>
+                <input v-model="newItemName" type="text" placeholder="z.B. Fischstäbchen" class="input input-bordered w-full" autofocus @keyup.enter="saveNewItem"/>
             </div>
-          </div>
-
-          <div class="form-control">
-            <label class="label"><span class="label-text font-bold">Ablaufdatum</span></label>
-            <input 
-              v-model="newItemExpiry" 
-              type="date" 
-              class="input input-bordered input-sm w-full" 
-            />
-          </div>
-        </div>
-
-        <div class="form-control w-full mb-2">
-          <label class="label"><span class="label-text font-bold">Kategorie (Optional)</span></label>
-          
-          <div v-if="currentLocationCategories.length > 0" class="flex flex-wrap gap-2 mb-3">
-            <button 
-              v-for="cat in currentLocationCategories" 
-              :key="cat.id"
-              @click="onCategorySelect(cat.id)"
-              class="btn btn-sm normal-case"
-              :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'"
-            >
-              {{ cat.name }}
-            </button>
-          </div>
-
-          <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
-            <input type="checkbox" :checked="!!newCategoryName" /> 
-            <div class="collapse-title text-sm font-medium text-gray-500">
-              Oder neue Kategorie erstellen...
+            <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="form-control">
+                <label class="label"><span class="label-text font-bold">Anzahl</span></label>
+                <div class="join">
+                <button @click="newItemQuantity > 1 ? newItemQuantity-- : null" class="btn btn-sm join-item">-</button>
+                <input v-model="newItemQuantity" type="number" min="1" class="input input-bordered input-sm join-item w-full text-center" />
+                <button @click="newItemQuantity++" class="btn btn-sm join-item">+</button>
+                </div>
             </div>
-            <div class="collapse-content">
-              <input 
-                v-model="newCategoryName"
-                @input="onNewCategoryInput"
-                type="text" 
-                placeholder="Neue Kategorie benennen" 
-                class="input input-bordered input-sm w-full mt-2" 
-              />
+            <div class="form-control">
+                <label class="label"><span class="label-text font-bold">Ablaufdatum</span></label>
+                <input v-model="newItemExpiry" type="date" class="input input-bordered input-sm w-full" />
             </div>
-          </div>
+            </div>
+            <div class="form-control w-full mb-2">
+            <label class="label"><span class="label-text font-bold">Kategorie (Optional)</span></label>
+            <div v-if="currentLocationCategories.length > 0" class="flex flex-wrap gap-2 mb-3">
+                <button v-for="cat in currentLocationCategories" :key="cat.id" @click="onCategorySelect(cat.id)" class="btn btn-sm normal-case" :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'">{{ cat.name }}</button>
+            </div>
+            <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
+                <input type="checkbox" :checked="!!newCategoryName" /> 
+                <div class="collapse-title text-sm font-medium text-gray-500">Oder neue Kategorie erstellen...</div>
+                <div class="collapse-content">
+                <input v-model="newCategoryName" @input="onNewCategoryInput" type="text" placeholder="Neue Kategorie benennen" class="input input-bordered input-sm w-full mt-2" />
+                </div>
+            </div>
+            </div>
+            <div class="modal-action">
+            <form method="dialog"><button class="btn btn-ghost mr-2">Abbrechen</button></form>
+            <button @click="saveNewItem" class="btn btn-primary" :disabled="!newItemName">Speichern</button>
+            </div>
         </div>
-
-        <div class="modal-action">
-          <form method="dialog">
-            <button class="btn btn-ghost mr-2">Abbrechen</button>
-          </form>
-          <button @click="saveNewItem" class="btn btn-primary" :disabled="!newItemName">
-            Speichern
-          </button>
-        </div>
-      </div>
     </dialog>
+
   </div>
 </template>
