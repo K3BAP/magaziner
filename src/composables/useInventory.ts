@@ -21,6 +21,7 @@ export interface Item {
   quantity: number;
   location_id: string;
   category_id: string | null;
+  expiry_date?: string | null;
 }
 
 // Globaler State (damit Daten erhalten bleiben, wenn man Views wechselt)
@@ -58,27 +59,47 @@ export function useInventory() {
     }
   };
 
-  // 2. Anzahl ändern (mit Datenbank-Update)
-  const updateQuantity = async (itemId: string, newAmount: number) => {
-    // Finde das Item im lokalen State
+  const deleteItem = async (itemId: string) => {
+    // Optimistisch: Sofort aus der lokalen Liste entfernen
+    const index = items.value.findIndex(i => i.id === itemId);
+    const deletedItem = items.value[index]; // Backup für Fehlerfall
+    if (index !== -1) {
+      items.value.splice(index, 1);
+    }
+
+    // DB Request
+    const { error } = await supabase
+      .from('items')
+      .delete()
+      .eq('id', itemId);
+
+    if (error) {
+      console.error('Löschen fehlgeschlagen:', error);
+      alert('Fehler beim Löschen!');
+      // Rollback: Item wieder einfügen
+      if (deletedItem) items.value.splice(index, 0, deletedItem);
+    }
+  };
+
+  // 2. UPDATE: updateQuantity korrigieren
+  // Wir übergeben jetzt den NEUEN ABSOLUTEN WERT, nicht mehr die Differenz
+  const updateQuantity = async (itemId: string, newQuantity: number) => {
     const item = items.value.find(i => i.id === itemId);
     if (!item) return;
 
-    // Optimistisches Update (sofort im UI anzeigen)
-    const oldAmount = item.quantity;
-    item.quantity = newAmount;
+    const oldQuantity = item.quantity;
+    
+    // Optimistisches Update
+    item.quantity = newQuantity;
 
-    // Update an DB senden
     const { error } = await supabase
       .from('items')
-      .update({ quantity: newAmount })
+      .update({ quantity: newQuantity })
       .eq('id', itemId);
 
-    // Rollback bei Fehler
     if (error) {
       console.error('Update fehlgeschlagen:', error);
-      item.quantity = oldAmount; // Zurücksetzen
-      alert('Konnte nicht speichern!');
+      item.quantity = oldQuantity; // Rollback
     }
   };
 
@@ -134,7 +155,61 @@ export function useInventory() {
     }
   };
 
+  const addCategory = async (name: string, locationId: string) => {
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({ name, location_id: locationId })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Fehler beim Erstellen der Kategorie:', error);
+      throw error;
+    }
+
+    if (data) {
+      categories.value.push(data); // Lokal hinzufügen
+      return data;
+    }
+  };
+
+  // NEU: Item mit Anzahl und Ablaufdatum erstellen
+  const addItem = async (
+    name: string, 
+    locationId: string, 
+    categoryId: string | null,
+    quantity: number,      // Neuer Parameter
+    expiryDate: string | null // Neuer Parameter
+  ) => {
+    
+    // Leeren String zu null umwandeln für die DB
+    const finalDate = expiryDate === '' ? null : expiryDate;
+
+    const { data, error } = await supabase
+      .from('items')
+      .insert({ 
+        name, 
+        location_id: locationId, 
+        category_id: categoryId,
+        quantity: quantity,     // Wert aus Parameter nutzen
+        expiry_date: finalDate  // Wert aus Parameter nutzen
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Fehler beim Erstellen des Artikels:', error);
+      alert('Konnte Artikel nicht speichern.');
+      return;
+    }
+
+    if (data) {
+      items.value.push(data);
+    }
+  };
+
   return {
+    categories,
     locations,
     items,
     loading,
@@ -143,6 +218,9 @@ export function useInventory() {
     getItemsByLocation,
     searchItems,
     getLocationName,
-    addLocation
+    addLocation,
+    addItem,
+    addCategory,
+    deleteItem
   };
 }

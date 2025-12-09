@@ -8,11 +8,14 @@ import ItemRow from './components/ItemRow.vue'; // Stelle sicher, dass diese Dat
 const { user, signUp, signIn, signOut } = useAuth();
 const { 
   locations, 
+  categories,
   fetchInventory, 
   getItemsByLocation, 
   searchItems, 
   loading: dataLoading,
-  addLocation
+  addLocation,
+  addItem,
+  addCategory
 } = useInventory();
 
 // Auth Form State
@@ -71,7 +74,7 @@ const newLocIcon = ref('📦'); // Standard Icon
 const addLocationDialog = ref<HTMLDialogElement | null>(null); // Referenz zum HTML Element
 
 // Eine Auswahl passender Icons für den Haushalt
-const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🥖', '🍎', '🥩', '🧊', '🧺'];
+const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🚪', '🍎', '🥩', '🧊', '🧺'];
 
 const openAddLocationModal = () => {
   newLocName.value = '';
@@ -85,6 +88,70 @@ const saveNewLocation = async () => {
   await addLocation(newLocName.value, newLocIcon.value);
   
   addLocationDialog.value?.close(); // Dialog schließen
+};
+
+// --- NEU: Item Modal State ---
+const addItemDialog = ref<HTMLDialogElement | null>(null);
+const newItemName = ref('');
+const selectedCategoryId = ref<string | null>(null); // ID der gewählten Kategorie
+const newCategoryName = ref(''); // Text für neue Kategorie
+
+// State für das Modal erweitern
+const newItemQuantity = ref(1);       // Standard: 1
+const newItemExpiry = ref('');
+
+// Computed: Verfügbare Kategorien NUR für den aktuellen Ort
+const currentLocationCategories = computed(() => {
+  if (!selectedLocation.value) return [];
+  return categories.value.filter(c => c.location_id === selectedLocation.value!.id);
+});
+
+const openAddItemModal = () => {
+  newItemName.value = '';
+  selectedCategoryId.value = null;
+  newCategoryName.value = '';
+  
+  // Neue Felder resetten
+  newItemQuantity.value = 1;
+  newItemExpiry.value = '';
+  
+  addItemDialog.value?.showModal();
+};
+
+const saveNewItem = async () => {
+  if (!newItemName.value || !selectedLocation.value) return;
+
+  try {
+    let finalCategoryId = selectedCategoryId.value;
+
+    if (newCategoryName.value.trim()) {
+      const newCat = await addCategory(newCategoryName.value, selectedLocation.value.id);
+      if (newCat) finalCategoryId = newCat.id;
+    }
+
+    // HIER IST DAS UPDATE: quantity und expiry übergeben
+    await addItem(
+      newItemName.value, 
+      selectedLocation.value.id, 
+      finalCategoryId,
+      newItemQuantity.value,
+      newItemExpiry.value
+    );
+
+    addItemDialog.value?.close();
+  } catch (e) {
+    alert('Fehler beim Speichern');
+  }
+};
+
+// UX-Helper: Wenn man im Textfeld tippt, Auswahl des Chips aufheben
+const onNewCategoryInput = () => {
+  if (newCategoryName.value) selectedCategoryId.value = null;
+};
+// UX-Helper: Wenn man Chip klickt, Textfeld leeren
+const onCategorySelect = (id: string) => {
+  selectedCategoryId.value = id;
+  newCategoryName.value = '';
 };
 </script>
 
@@ -162,14 +229,16 @@ const saveNewLocation = async () => {
         </div>
         <div v-if="currentLocationData.uncategorized.length === 0 && currentLocationData.grouped.length === 0" class="text-center opacity-50 mt-10">
           Dieser Ort ist leer.
+        </div>        
+        <div class="fixed bottom-6 right-6 z-20">
+          <button @click="openAddItemModal" class="btn btn-circle btn-primary btn-lg shadow-xl">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </div>
       </div>
 
-    </div>
-
-    <div class="btm-nav btm-nav-sm border-t border-base-300 lg:hidden">
-      <button :class="{active: currentView === 'dashboard'}" @click="goHome"><span class="text-xl">🏠</span></button>
-      <button :class="{active: currentView === 'search'}" @click="currentView = 'search'"><span class="text-xl">🔍</span></button>
     </div>
 
      <div v-if="currentView === 'search'" class="fixed inset-0 bg-base-200 z-20 p-4 pt-20">
@@ -226,5 +295,92 @@ const saveNewLocation = async () => {
       </div>
     </dialog>
 
+    <dialog ref="addItemDialog" class="modal modal-bottom sm:modal-middle">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Neues Produkt in {{ selectedLocation?.name }}</h3>
+        
+        <div class="form-control w-full mb-4">
+          <label class="label"><span class="label-text font-bold">Produktname</span></label>
+          <input 
+            v-model="newItemName" 
+            type="text" 
+            placeholder="z.B. Fischstäbchen" 
+            class="input input-bordered w-full" 
+            autofocus
+            @keyup.enter="saveNewItem"
+          />
+        </div>
+
+        <div class="form-control w-full mb-2">
+           </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          
+          <div class="form-control">
+            <label class="label"><span class="label-text font-bold">Anzahl</span></label>
+            <div class="join">
+              <button @click="newItemQuantity > 1 ? newItemQuantity-- : null" class="btn btn-sm join-item">-</button>
+              <input 
+                v-model="newItemQuantity" 
+                type="number" 
+                min="1" 
+                class="input input-bordered input-sm join-item w-full text-center" 
+              />
+              <button @click="newItemQuantity++" class="btn btn-sm join-item">+</button>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label class="label"><span class="label-text font-bold">Ablaufdatum</span></label>
+            <input 
+              v-model="newItemExpiry" 
+              type="date" 
+              class="input input-bordered input-sm w-full" 
+            />
+          </div>
+        </div>
+
+        <div class="form-control w-full mb-2">
+          <label class="label"><span class="label-text font-bold">Kategorie (Optional)</span></label>
+          
+          <div v-if="currentLocationCategories.length > 0" class="flex flex-wrap gap-2 mb-3">
+            <button 
+              v-for="cat in currentLocationCategories" 
+              :key="cat.id"
+              @click="onCategorySelect(cat.id)"
+              class="btn btn-sm normal-case"
+              :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'"
+            >
+              {{ cat.name }}
+            </button>
+          </div>
+
+          <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
+            <input type="checkbox" :checked="!!newCategoryName" /> 
+            <div class="collapse-title text-sm font-medium text-gray-500">
+              Oder neue Kategorie erstellen...
+            </div>
+            <div class="collapse-content">
+              <input 
+                v-model="newCategoryName"
+                @input="onNewCategoryInput"
+                type="text" 
+                placeholder="Neue Kategorie benennen" 
+                class="input input-bordered input-sm w-full mt-2" 
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-action">
+          <form method="dialog">
+            <button class="btn btn-ghost mr-2">Abbrechen</button>
+          </form>
+          <button @click="saveNewItem" class="btn btn-primary" :disabled="!newItemName">
+            Speichern
+          </button>
+        </div>
+      </div>
+    </dialog>
   </div>
 </template>
