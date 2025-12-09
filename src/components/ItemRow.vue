@@ -10,7 +10,8 @@ const {
   addInstance, 
   getLocationName, 
   updateItem,     // <--- NEU
-  categories      // <--- NEU (für die Auswahl)
+  categories,      // <--- NEU (für die Auswahl)
+  addCategory
 } = useInventory();
 
 // --- Logik für Instanzen (Wie vorher) ---
@@ -20,25 +21,64 @@ const newInstDate = ref('');
 const confirmDialog = ref<HTMLDialogElement | null>(null);
 const instanceToDelete = ref<string | null>(null);
 
-// --- NEU: Logik für Item Bearbeiten ---
+// --- Logik für Item Bearbeiten ---
 const editItemDialog = ref<HTMLDialogElement | null>(null);
 const editName = ref('');
 const editCategoryId = ref<string | null>(null);
+const editNewCategoryName = ref(''); // <--- NEU: Für das Textfeld
 
-// Verfügbare Kategorien für DIESEN Ort filtern
+// Verfügbare Kategorien (Bleibt gleich)
 const availableCategories = computed(() => {
   return categories.value.filter(c => c.location_id === props.item.location_id);
 });
 
+// Modal öffnen (Resetten)
 const openEditItemModal = () => {
   editName.value = props.item.name;
   editCategoryId.value = props.item.category_id;
+  editNewCategoryName.value = ''; // Reset
   editItemDialog.value?.showModal();
+};
+
+// UX Helper: Chip klicken
+const onEditCategorySelect = (id: string) => {
+  // Wenn man auf den bereits aktiven Chip klickt -> Abwählen
+  if (editCategoryId.value === id) {
+    editCategoryId.value = null;
+  } else {
+    editCategoryId.value = id;
+  }
+  editNewCategoryName.value = ''; // Textfeld leeren
+};
+
+// UX Helper: Textfeld tippen
+const onEditNewCategoryInput = () => {
+  if (editNewCategoryName.value) {
+    editCategoryId.value = null; // Chip abwählen
+  }
 };
 
 const saveItemChanges = async () => {
   if (!editName.value.trim()) return;
-  await updateItem(props.item.id, editName.value, editCategoryId.value);
+
+  // NEU: Prüfen, ob eine neue Kategorie erstellt werden muss
+  let finalCategoryId = editCategoryId.value;
+
+  if (editNewCategoryName.value.trim()) {
+    try {
+      // Neue Kategorie am aktuellen Ort des Items erstellen
+      const newCat = await addCategory(editNewCategoryName.value, props.item.location_id);
+      if (newCat) {
+        finalCategoryId = newCat.id;
+      }
+    } catch (e) {
+      alert('Fehler beim Erstellen der Kategorie');
+      return;
+    }
+  }
+
+  // Update mit der (potenziell neuen) ID durchführen
+  await updateItem(props.item.id, editName.value, finalCategoryId);
   editItemDialog.value?.close();
 };
 
@@ -151,20 +191,40 @@ const isMultiInstance = computed(() => props.item.instances.length > 1);
         <h3 class="font-bold text-lg mb-4">Artikel bearbeiten</h3>
         
         <div class="form-control mb-4">
-          <label class="label"><span class="label-text">Name</span></label>
+          <label class="label"><span class="label-text font-bold">Name</span></label>
           <input v-model="editName" type="text" class="input input-bordered w-full" />
         </div>
 
         <div class="form-control mb-6">
-          <label class="label"><span class="label-text">Kategorie</span></label>
-          <select v-model="editCategoryId" class="select select-bordered w-full">
-            <option :value="null">Keine Kategorie</option>
-            <option v-for="cat in availableCategories" :key="cat.id" :value="cat.id">
-              {{ cat.name }}
-            </option>
-          </select>
-          <div class="label" v-if="!showLocation">
-            <span class="label-text-alt text-gray-400">Kategorien des aktuellen Ortes</span>
+          <label class="label"><span class="label-text font-bold">Kategorie</span></label>
+          
+          <div v-if="availableCategories.length > 0" class="flex flex-wrap gap-2 mb-3">
+             <button 
+               v-for="cat in availableCategories" 
+               :key="cat.id"
+               @click="onEditCategorySelect(cat.id)"
+               class="btn btn-sm normal-case"
+               :class="editCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'"
+             >
+               {{ cat.name }}
+             </button>
+          </div>
+          <div v-else class="text-xs text-gray-400 mb-2">Keine Kategorien in diesem Ort.</div>
+
+          <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
+            <input type="checkbox" :checked="!!editNewCategoryName" /> 
+            <div class="collapse-title text-sm font-medium text-gray-500">
+              Oder neue Kategorie erstellen...
+            </div>
+            <div class="collapse-content">
+              <input 
+                v-model="editNewCategoryName"
+                @input="onEditNewCategoryInput"
+                type="text" 
+                placeholder="Neue Kategorie benennen" 
+                class="input input-bordered input-sm w-full mt-2" 
+              />
+            </div>
           </div>
         </div>
 
