@@ -94,7 +94,7 @@ const getExpiryClass = (dateStr: string | null) => {
   const expiry = new Date(dateStr);
   const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (86400000));
   if (diffDays < 0) return 'text-error font-bold';
-  if (diffDays <= 7) return 'text-warning font-bold';
+  if (diffDays <= 14) return 'text-warning font-bold';
   return 'text-gray-500';
 };
 
