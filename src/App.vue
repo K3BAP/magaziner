@@ -15,6 +15,7 @@ const {
   loading: dataLoading,
   addLocation,
   addCategory,
+  deleteCategory,
   addItem
 } = useInventory();
 
@@ -163,6 +164,16 @@ const saveNewItem = async () => {
     await addItem(newItemName.value, selectedLocation.value.id, finalCategoryId, newItemQuantity.value, newItemExpiry.value);
     addItemDialog.value?.close();
   } catch (e) { alert('Fehler beim Speichern'); }
+};
+
+const handleDeleteCategory = async (catId: string) => {
+  const success = await deleteCategory(catId);
+  if (success) {
+    // Falls die gelöschte Kategorie gerade ausgewählt war -> Auswahl aufheben
+    if (selectedCategoryId.value === catId) {
+      selectedCategoryId.value = null;
+    }
+  }
 };
 </script>
 
@@ -364,7 +375,32 @@ const saveNewItem = async () => {
           <div class="form-control w-full mb-2">
             <label class="label"><span class="label-text font-bold">Kategorie</span></label>
             <div v-if="currentLocationCategories.length > 0" class="flex flex-wrap gap-2 mb-3">
-               <button v-for="cat in currentLocationCategories" :key="cat.id" @click="onCategorySelect(cat.id)" class="btn btn-sm" :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'">{{ cat.name }}</button>
+               
+               <div v-for="cat in currentLocationCategories" :key="cat.id" class="join shadow-sm">
+                  
+                  <button 
+                    @click="onCategorySelect(cat.id)" 
+                    class="btn btn-sm join-item normal-case border-r-0"
+                    :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'"
+                    type="button"
+                  >
+                    {{ cat.name }}
+                  </button>
+
+                  <button 
+                    @click.stop="handleDeleteCategory(cat.id)"
+                    class="btn btn-sm join-item px-2 border-l-0 hover:bg-error hover:text-white hover:border-error transition-colors"
+                    :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'"
+                    type="button"
+                    title="Kategorie löschen"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+
+               </div>
+
             </div>
             <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
                <input type="checkbox" :checked="!!newCategoryName" /> 

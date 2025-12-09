@@ -173,6 +173,39 @@ export function useInventory() {
     }
   };
 
+  const deleteCategory = async (categoryId: string) => {
+    // 1. Prüfen: Gibt es Items in dieser Kategorie?
+    // Wir schauen in unser lokales Array, das ist am schnellsten.
+    const hasItems = items.value.some(i => i.category_id === categoryId);
+    
+    if (hasItems) {
+      alert('Diese Kategorie ist nicht leer! Bitte erst die Artikel löschen oder verschieben.');
+      return false; // Fehler
+    }
+
+    // 2. Bestätigung
+    if (!confirm('Kategorie wirklich löschen?')) return false;
+
+    // 3. Optimistisch löschen (Lokal)
+    const prevCats = [...categories.value];
+    categories.value = categories.value.filter(c => c.id !== categoryId);
+
+    // 4. DB Request
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', categoryId);
+
+    if (error) {
+      console.error('Fehler beim Löschen der Kategorie:', error);
+      alert('Fehler beim Löschen.');
+      categories.value = prevCats; // Rollback
+      return false;
+    }
+    
+    return true; // Erfolg
+  };
+
   // NEU: Item mit Anzahl und Ablaufdatum erstellen
   const addItem = async (
     name: string, 
@@ -221,6 +254,7 @@ export function useInventory() {
     addLocation,
     addItem,
     addCategory,
+    deleteCategory,
     deleteItem
   };
 }
