@@ -16,7 +16,9 @@ const {
   addLocation,
   addCategory,
   deleteCategory,
-  addItem
+  addItem,
+  updateLocation,
+  deleteLocation
 } = useInventory();
 
 // --- Auth Form State ---
@@ -129,7 +131,7 @@ const newItemQuantity = ref(1);
 const newItemExpiry = ref('');
 const selectedCategoryId = ref<string | null>(null);
 const newCategoryName = ref('');
-const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🥖', '🍎', '🥩', '🧊', '🧺'];
+const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🚪', '🍎', '🥩', '🧊', '🧺'];
 
 // Computed für Modal
 const currentLocationCategories = computed(() => {
@@ -137,17 +139,6 @@ const currentLocationCategories = computed(() => {
   return categories.value.filter(c => c.location_id === selectedLocation.value!.id);
 });
 
-// Modal Funktionen
-const openAddLocationModal = () => {
-  newLocName.value = '';
-  newLocIcon.value = '📦';
-  addLocationDialog.value?.showModal();
-};
-const saveNewLocation = async () => {
-  if (!newLocName.value) return;
-  await addLocation(newLocName.value, newLocIcon.value);
-  addLocationDialog.value?.close();
-};
 const openAddItemModal = () => {
   newItemName.value = '';
   newItemQuantity.value = 1;
@@ -180,6 +171,62 @@ const handleDeleteCategory = async (catId: string) => {
       selectedCategoryId.value = null;
     }
   }
+};
+
+// --- STATE FÜR ORT BEARBEITEN ---
+const editingLocationId = ref<string | null>(null); // Wenn gesetzt, sind wir im Edit-Modus
+
+// Öffnen für "NEU ERSTELLEN"
+const openAddLocationModal = () => {
+  editingLocationId.value = null; // Reset: Kein Edit-Modus
+  newLocName.value = '';
+  newLocIcon.value = '📦';
+  addLocationDialog.value?.showModal();
+};
+
+// Öffnen für "BEARBEITEN"
+const openEditLocationModal = (loc: Location, event: Event) => {
+  event.stopPropagation(); // WICHTIG: Verhindert, dass sich der Ort öffnet
+  editingLocationId.value = loc.id;
+  newLocName.value = loc.name;
+  newLocIcon.value = loc.icon || '📦';
+  addLocationDialog.value?.showModal();
+};
+
+// Speichern (Unterscheidet zwischen Create und Update)
+const saveNewLocation = async () => {
+  if (!newLocName.value) return;
+
+  if (editingLocationId.value) {
+    // Update Fall
+    await updateLocation(editingLocationId.value, newLocName.value, newLocIcon.value);
+  } else {
+    // Create Fall
+    await addLocation(newLocName.value, newLocIcon.value);
+  }
+  
+  addLocationDialog.value?.close();
+};
+
+// LÖSCHEN Logik
+const initiateDeleteLocation = async () => {
+  if (!editingLocationId.value) return;
+
+  // Prüfen, ob Items drin sind
+  const itemsInLocation = items.value.filter(i => i.location_id === editingLocationId.value);
+  const count = itemsInLocation.length;
+
+  if (count > 0) {
+    if (!confirm(`ACHTUNG: In diesem Ort befinden sich noch ${count} Produkte.\n\nWenn du den Ort löschst, werden diese Produkte endgültig entfernt.\n\nWirklich löschen?`)) {
+      return;
+    }
+  } else {
+    if (!confirm('Ort wirklich löschen?')) return;
+  }
+
+  // Löschen durchführen
+  await deleteLocation(editingLocationId.value);
+  addLocationDialog.value?.close();
 };
 </script>
 
@@ -239,11 +286,22 @@ const handleDeleteCategory = async (catId: string) => {
 
         <div v-else-if="currentView === 'dashboard'" class="grid grid-cols-2 gap-4">
           <div v-for="loc in locations" :key="loc.id" @click="openLocation(loc)"
-            class="card bg-base-100 shadow-md hover:shadow-lg cursor-pointer active:scale-95 transition-transform">
+            class="card bg-base-100 shadow-md hover:shadow-lg cursor-pointer active:scale-95 transition-transform relative group">
+            
             <div class="card-body items-center text-center p-6">
               <div class="text-4xl mb-2">{{ loc.icon || '📦' }}</div>
               <h2 class="card-title text-base">{{ loc.name }}</h2>
             </div>
+
+            <button 
+              @click="(e) => openEditLocationModal(loc, e)"
+              class="btn btn-xs btn-circle btn-ghost absolute top-2 right-2 opacity-50 hover:opacity-100 bg-base-200/50 hover:bg-base-300 border-none"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
           </div>
           <button @click="openAddLocationModal" class="card border-2 border-dashed border-base-300 bg-base-100/50 hover:bg-base-100 flex items-center justify-center p-6 cursor-pointer h-full min-h-[140px]">
             <div class="text-center text-base-content/60">
@@ -348,18 +406,38 @@ const handleDeleteCategory = async (catId: string) => {
       </ul>
     </div>
 
-  </div> <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
+  </div> 
+
+  <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
       <div class="modal-box">
-          <h3 class="font-bold text-lg mb-4">Neuen Ort erstellen</h3>
+          <h3 class="font-bold text-lg mb-4">
+            {{ editingLocationId ? 'Ort bearbeiten' : 'Neuen Ort erstellen' }}
+          </h3>
+          
           <div class="form-control w-full mb-4">
             <input v-model="newLocName" type="text" placeholder="Name" class="input input-bordered w-full" @keyup.enter="saveNewLocation"/>
           </div>
           <div class="grid grid-cols-6 gap-2 mb-6">
             <button v-for="icon in availableIcons" :key="icon" @click="newLocIcon = icon" class="btn btn-square text-xl" :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'" type="button">{{ icon }}</button>
           </div>
-          <div class="modal-action">
-            <form method="dialog"><button class="btn btn-ghost mr-2">Abbrechen</button></form>
-            <button @click="saveNewLocation" class="btn btn-primary">Erstellen</button>
+          
+          <div class="modal-action justify-between">
+            <div>
+              <button 
+                v-if="editingLocationId" 
+                @click="initiateDeleteLocation" 
+                class="btn btn-ghost text-error hover:bg-error/10"
+              >
+                Löschen
+              </button>
+            </div>
+
+            <div class="flex gap-2">
+              <form method="dialog"><button class="btn btn-ghost">Abbrechen</button></form>
+              <button @click="saveNewLocation" class="btn btn-primary">
+                {{ editingLocationId ? 'Speichern' : 'Erstellen' }}
+              </button>
+            </div>
           </div>
       </div>
   </dialog>

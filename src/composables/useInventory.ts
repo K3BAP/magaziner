@@ -211,10 +211,65 @@ export function useInventory() {
     return items.value.filter(i => i.name.toLowerCase().includes(query.toLowerCase()));
   };
 
+  const updateLocation = async (id: string, name: string, icon: string) => {
+    // Optimistisch lokal updaten
+    const loc = locations.value.find(l => l.id === id);
+    const oldName = loc?.name;
+    const oldIcon = loc?.icon;
+
+    if (loc) {
+      loc.name = name;
+      loc.icon = icon;
+    }
+
+    const { error } = await supabase
+      .from('locations')
+      .update({ name, icon })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Update fehlgeschlagen', error);
+      alert('Konnte Ort nicht aktualisieren');
+      // Rollback
+      if (loc) {
+        loc.name = oldName!;
+        loc.icon = oldIcon!;
+      }
+    }
+  };
+
+  // NEU: Ort löschen
+  const deleteLocation = async (id: string) => {
+    // 1. Lokal entfernen
+    const prevLocs = [...locations.value];
+    locations.value = locations.value.filter(l => l.id !== id);
+    
+    // Auch die Items lokal entfernen, damit die "Alle Produkte" Liste stimmt
+    const prevItems = [...items.value];
+    items.value = items.value.filter(i => i.location_id !== id);
+
+    // 2. DB Request
+    // WICHTIG: Da wir beim Erstellen der Tabellen "ON DELETE CASCADE" genutzt haben,
+    // löscht Supabase automatisch alle Items und Kategorien in diesem Ort.
+    const { error } = await supabase
+      .from('locations')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Löschen fehlgeschlagen', error);
+      alert('Konnte Ort nicht löschen.');
+      // Rollback
+      locations.value = prevLocs;
+      items.value = prevItems;
+    }
+  };
+
   return {
     locations, items, categories, loading,
     fetchInventory, addLocation, addCategory, deleteCategory, addItem, 
     addInstance, updateInstanceQuantity, deleteInstance, // <-- Neue Actions
-    getItemsByLocation, searchItems, getLocationName
+    getItemsByLocation, searchItems, getLocationName,
+    updateLocation, deleteLocation
   };
 }
