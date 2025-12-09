@@ -131,7 +131,7 @@ const newItemQuantity = ref(1);
 const newItemExpiry = ref('');
 const selectedCategoryId = ref<string | null>(null);
 const newCategoryName = ref('');
-const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🚪', '🍎', '🥩', '🧊', '🧺'];
+const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🚪', '🍎', '🧊', '🧺', '🛏', '🥖', '🏠', '🏡', '🚗'];
 
 // Computed für Modal
 const currentLocationCategories = computed(() => {
@@ -417,7 +417,7 @@ const initiateDeleteLocation = async () => {
           <div class="form-control w-full mb-4">
             <input v-model="newLocName" type="text" placeholder="Name" class="input input-bordered w-full" @keyup.enter="saveNewLocation"/>
           </div>
-          <div class="grid grid-cols-6 gap-2 mb-6">
+          <div class="grid grid-cols-4 gap-2 mb-6 place-items-center">
             <button v-for="icon in availableIcons" :key="icon" @click="newLocIcon = icon" class="btn btn-square text-xl" :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'" type="button">{{ icon }}</button>
           </div>
           
