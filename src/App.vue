@@ -3,6 +3,8 @@ import { ref, computed, watchEffect, nextTick } from 'vue';
 import { useAuth } from './composables/useAuth';
 import { useInventory, type Location } from './composables/useInventory';
 import ItemRow from './components/ItemRow.vue';
+import { useTodos } from './composables/useTodos';
+import TodoRow from './components/TodoRow.vue';
 
 // --- Auth & Data Logic ---
 const { user, signUp, signIn, signOut } = useAuth();
@@ -27,9 +29,20 @@ const password = ref('');
 const isLoginMode = ref(true);
 const authLoading = ref(false);
 
+const { 
+  todos, 
+  fetchTodos, 
+  addTodo, 
+  loading: todosLoading 
+} = useTodos();
+
+// State für neues Todo
+const newTodoTitle = ref('');
+
+
 // --- Navigation State ---
 // 'dashboard' = Kacheln, 'allItems' = Liste aller Produkte, 'location' = Einzelansicht
-const currentView = ref<'dashboard' | 'allItems' | 'location'>('dashboard'); 
+const currentView = ref<'dashboard' | 'allItems' | 'location' | 'todos'>('dashboard');
 const selectedLocation = ref<Location | null>(null);
 const drawerOpen = ref(false); // Steuert die Sidebar
 
@@ -74,8 +87,18 @@ const allItemsFiltered = computed(() => {
 
 // --- Lifecycle & Watchers ---
 watchEffect(() => {
-  if (user.value) fetchInventory();
+  if (user.value) {
+    fetchInventory();
+    fetchTodos(); // NEU
+  }
 });
+
+// Helper für neues Todo
+const handleAddTodo = async () => {
+  if (!newTodoTitle.value.trim()) return;
+  await addTodo(newTodoTitle.value);
+  newTodoTitle.value = ''; // Input leeren
+};
 
 // --- Actions ---
 
@@ -102,7 +125,7 @@ const openLocation = (loc: Location) => {
   currentView.value = 'location';
 };
 
-const navigateTo = (view: 'dashboard' | 'allItems') => {
+const navigateTo = (view: 'dashboard' | 'allItems' | 'todos') => {
   currentView.value = view;
   selectedLocation.value = null;
   drawerOpen.value = false; // Sidebar schließen bei Klick
@@ -267,13 +290,17 @@ const initiateDeleteLocation = async () => {
         
         <div class="flex-1">
           <span class="btn btn-ghost normal-case text-xl truncate">
-            {{ currentView === 'dashboard' ? 'Mein Vorrat' : (currentView === 'allItems' ? 'Alle Produkte' : selectedLocation?.name) }}
+            {{ 
+              currentView === 'dashboard' ? 'Mein Vorrat' : 
+              (currentView === 'allItems' ? 'Alle Produkte' : 
+              (currentView === 'todos' ? 'Aufgaben' : selectedLocation?.name)) 
+            }}
           </span>
         </div>
         
         <div class="flex-none">
           <button 
-            v-if="currentView === 'allItems'" 
+            v-if="currentView !== 'dashboard'" 
             class="btn btn-ghost btn-circle" 
             @click="navigateTo('dashboard')"
             title="Zurück zum Dashboard"
@@ -282,16 +309,13 @@ const initiateDeleteLocation = async () => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
           </button>
-
+          
           <button 
-            v-else 
+            v-else
             class="btn btn-ghost btn-circle" 
             @click="goToSearch"
-            title="Suche / Alle Produkte"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </button>
         </div>
       </div>
@@ -391,6 +415,34 @@ const initiateDeleteLocation = async () => {
 
         </div>
 
+        <div v-else-if="currentView === 'todos'">
+          
+          <div class="join w-full mb-6 shadow-sm">
+            <input 
+              v-model="newTodoTitle" 
+              @keyup.enter="handleAddTodo"
+              class="input input-bordered join-item w-full" 
+              placeholder="Neue Aufgabe (z.B. Müll rausbringen)..." 
+            />
+            <button @click="handleAddTodo" class="btn btn-primary join-item">Hinzufügen</button>
+          </div>
+
+          <div v-if="todosLoading" class="flex justify-center py-4">
+             <span class="loading loading-spinner"></span>
+          </div>
+
+          <div v-else class="card bg-base-100 shadow-sm overflow-hidden">
+             <div v-if="todos.length > 0">
+                <TodoRow v-for="todo in todos" :key="todo.id" :todo="todo" />
+             </div>
+             
+             <div v-else class="p-10 text-center opacity-50 flex flex-col items-center gap-2">
+                <span class="text-4xl">🎉</span>
+                <span>Alles erledigt!</span>
+             </div>
+          </div>
+        </div>
+
       </div>
     </div> 
     <div class="drawer-side z-20">
@@ -408,6 +460,11 @@ const initiateDeleteLocation = async () => {
         <li>
           <a @click="navigateTo('allItems')" :class="{active: currentView === 'allItems'}">
             🔍 Alle Produkte
+          </a>
+        </li>
+        <li>
+          <a @click="navigateTo('todos')" :class="{active: currentView === 'todos'}">
+            ✅ To-Do Liste
           </a>
         </li>
 
