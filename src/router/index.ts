@@ -7,6 +7,7 @@ import AllItemsView from '../views/AllItemsView.vue'
 import TodoView from '../views/TodoView.vue'
 import LoginView from '../views/LoginView.vue'
 import { useAuth } from '../composables/useAuth'
+import { watch } from 'vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -44,16 +45,23 @@ const router = createRouter({
   ]
 })
 
-// Navigation Guard: Protect routes that require auth
+// Navigation Guard
 router.beforeEach(async (to, from, next) => {
   const { user, isAuthReady } = useAuth()
-  
-  // Wait for Supabase to initialize session check
-  // (You might need to adjust useAuth to expose a readiness promise if not already present, 
-  // but for now we assume user state is reactive)
-  
-  // Simple check: if route requires auth and we have no user -> redirect to login
-  // Note: In a real app, ensure useAuth has finished loading the session before this check.
+
+  // 1. WARTEN: Wenn Supabase noch nicht fertig ist, warten wir
+  if (!isAuthReady.value) {
+    await new Promise<void>((resolve) => {
+      const stopWatch = watch(isAuthReady, (isReady) => {
+        if (isReady) {
+          stopWatch()
+          resolve()
+        }
+      })
+    })
+  }
+
+  // 2. PRÜFEN: Jetzt wissen wir sicher, ob user da ist oder nicht
   if (to.meta.requiresAuth && !user.value) {
     next({ name: 'login' })
   } else if (to.name === 'login' && user.value) {
