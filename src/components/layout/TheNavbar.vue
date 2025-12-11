@@ -10,7 +10,8 @@ const { locations } = useInventory(); // To look up location name by ID
 // Compute title based on current route
 const pageTitle = computed(() => {
   switch (route.name) {
-    case 'dashboard': return 'Mein Vorrat';
+    case 'dashboard': return 'Übersicht'; // NEU
+    case 'locations': return 'Meine Orte'; // UMBENANNT
     case 'allItems': return 'Alle Produkte';
     case 'todos': return 'Aufgaben';
     case 'location': 

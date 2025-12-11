@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 // We will create these components in the next steps
 import DashboardView from '../views/DashboardView.vue'
 import LocationDetailView from '../views/LocationDetailView.vue'
+import LocationsView from '../views/LocationsView.vue'
 import AllItemsView from '../views/AllItemsView.vue'
 import TodoView from '../views/TodoView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -20,14 +21,20 @@ const router = createRouter({
     {
       path: '/',
       name: 'dashboard',
-      component: DashboardView,
+      component: DashboardView, // Zeigt jetzt das Chart-Dashboard
       meta: { requiresAuth: true }
     },
     {
-      path: '/location/:id', // Dynamic route for specific locations
+      path: '/locations', // Neue Route für die Kacheln
+      name: 'locations',
+      component: LocationsView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/location/:id',
       name: 'location',
       component: LocationDetailView,
-      props: true, // Passes 'id' as a prop to the component
+      props: true,
       meta: { requiresAuth: true }
     },
     {

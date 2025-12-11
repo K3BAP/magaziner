@@ -29,14 +29,30 @@ const handleSignOut = async () => {
     <ul class="menu p-4 w-80 min-h-full bg-base-100 text-base-content flex flex-col">
       <li class="mb-4 font-bold text-xl px-4 py-2 bg-base-200 rounded-lg">Mein Vorrat</li>
       
-      <li><a @click="navigate('dashboard')">📦 Orte / Dashboard</a></li>
-      <li><a @click="navigate('allItems')">🔍 Alle Produkte</a></li>
-      <li><a @click="navigate('todos')">✅ To-Do Liste</a></li>
+      <li>
+        <a @click="navigate('dashboard')">
+          📊 Dashboard
+        </a>
+      </li>
 
-      <div class="divider"></div>
-      
-      <li class="mt-auto"><a @click="handleSignOut" class="text-error">🚪 Abmelden</a></li>
-      <li class="text-xs text-center mt-2 opacity-50">User: {{ user?.email }}</li>
-    </ul>
+      <li>
+        <a @click="navigate('locations')">
+          📦 Vorräte
+        </a>
+      </li>
+
+      <li>
+        <a @click="navigate('todos')">
+          ✅ Aufgaben
+        </a>
+      </li>
+
+      <li>
+        <a @click="navigate('allItems')">
+          🔍 Produktsuche
+        </a>
+      </li>
+
+      </ul>
   </div>
 </template>
