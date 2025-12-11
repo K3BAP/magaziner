@@ -10,8 +10,8 @@ const { locations } = useInventory();
 const pageTitle = computed(() => {
   switch (route.name) {
     case 'dashboard': return 'Übersicht';
-    case 'locations': return 'Vorräte'; // 1. Neuer Titel
-    case 'allItems': return 'Alle Produkte';
+    case 'locations': return 'Vorräte';
+    case 'allItems': return 'Alle Vorräte'; // 1. Umbenannt
     case 'todos': return 'Aufgaben';
     case 'location': 
       const loc = locations.value.find(l => l.id === route.params.id);
@@ -20,24 +20,22 @@ const pageTitle = computed(() => {
   }
 });
 
-// 2. Navigation Logic
 const goUp = () => {
-  // Wenn wir in einem Ort sind, gehen wir eine Ebene höher zur Liste der Orte
   if (route.name === 'location') {
     router.push({ name: 'locations' });
   } else {
-    // Fallback
     router.push({ name: 'dashboard' });
   }
 };
 
 const goToSearch = () => router.push({ name: 'allItems' });
 
-// 3. Sichtbarkeit des Such-Icons
 const showSearch = computed(() => {
-  // Nur auf Dashboard und Vorrats-Seiten anzeigen
   return ['dashboard', 'locations', 'location'].includes(route.name as string);
 });
+
+// Helper für Titel-Klick
+const goHome = () => router.push({ name: 'dashboard' });
 </script>
 
 <template>
@@ -53,16 +51,15 @@ const showSearch = computed(() => {
     </div>
     
     <div class="flex-1">
-      <span class="btn btn-ghost normal-case text-xl truncate">
+      <a @click="goHome" class="btn btn-ghost normal-case text-xl truncate cursor-pointer">
         {{ pageTitle }}
-      </span>
+      </a>
     </div>
     
     <div class="flex-none">
       <button v-if="showSearch" class="btn btn-ghost btn-circle" @click="goToSearch">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
       </button>
-      
-      </div>
+    </div>
   </div>
 </template>
