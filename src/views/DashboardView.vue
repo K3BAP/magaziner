@@ -24,7 +24,7 @@ const getExpiryStatus = (dateStr: string | null) => {
   const diffDays = Math.ceil(diffTime / (86400000));
   
   if (diffDays < 0) return 'expired';
-  if (diffDays <= 7) return 'soon';
+  if (diffDays <= 14) return 'soon';
   return 'ok';
 };
 
