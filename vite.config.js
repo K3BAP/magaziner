@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate', // Updates werden sofort geladen
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Mein Vorrats-Manager',
-        short_name: 'Vorräte',
-        description: 'Verwaltung meiner Haushaltsvorräte',
+        name: 'Mein Haushalts-Manager',
+        short_name: 'Haushalt',
+        description: 'Verwaltung meines Haushalts',
         theme_color: '#ffffff', // Farbe der Statusleiste (oben am Handy)
         background_color: '#ffffff', // Hintergrundfarbe beim Starten
         display: 'standalone', // Versteckt die Browser-Adressleiste!
