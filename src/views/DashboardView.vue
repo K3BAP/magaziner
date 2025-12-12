@@ -11,8 +11,8 @@ import { Doughnut, Bar } from 'vue-chartjs';
 ChartJS.register(ArcElement, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 const router = useRouter();
-const { items, locations, fetchInventory } = useInventory();
-const { todos, fetchTodos } = useTodos();
+const { items, locations } = useInventory(); // addItem nicht mehr nötig hier
+const { todos } = useTodos();
 
 // --- 1. Statistik Logik ---
 
@@ -23,6 +23,7 @@ const getExpiryStatus = (dateStr: string | null) => {
   const diffTime = expiry.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (86400000));
   
+  // Hinweis: Hier ist dein 14-Tage Threshold berücksichtigt
   if (diffDays < 0) return 'expired';
   if (diffDays <= 14) return 'soon';
   return 'ok';
@@ -33,20 +34,25 @@ const stats = computed(() => {
   let expired = 0;
   let soon = 0;
   let ok = 0;
+  let opened = 0;
 
   items.value.forEach(item => {
     if (item.instances && item.instances.length > 0) {
       item.instances.forEach(inst => {
+        // Status prüfen (MHD)
         const status = getExpiryStatus(inst.expiry_date);
         if (status === 'expired') expired++;
         else if (status === 'soon') soon++;
         else ok++;
+
+        // Status prüfen (Geöffnet)
+        if (inst.opened_at) opened++;
       });
     } else {
         ok++; 
     }
   });
-  return { expired, soon, ok };
+  return { expired, soon, ok, opened };
 });
 
 const openTodosCount = computed(() => todos.value.filter(t => !t.is_completed).length);
@@ -89,19 +95,20 @@ const barOptions = {
   plugins: { legend: { display: false } }
 };
 
-// --- 3. Detail Modal Logik (Neu) ---
+// --- 3. Detail Modal Logik ---
 
 const detailsDialog = ref<HTMLDialogElement | null>(null);
 const detailsTitle = ref('');
-const detailsList = ref<{ name: string; date: string; location: string }[]>([]);
+// Wir speichern hier generische Objekte für die Liste
+const detailsList = ref<{ name: string; date: string; location: string; rawDate?: number }[]>([]);
 
 // Hilfsfunktion: Findet den Ortsnamen
 const getLocName = (id: string) => locations.value.find(l => l.id === id)?.name || 'Unbekannt';
 const formatDate = (d: string) => new Date(d).toLocaleDateString('de-DE');
 
-// Öffnet Modal für Abgelaufene
+// A) Modal für Abgelaufene
 const openExpiredDetails = () => {
-  if (stats.value.expired === 0) return; // Nichts zu tun
+  if (stats.value.expired === 0) return;
 
   detailsTitle.value = '⚠️ Bereits abgelaufen';
   detailsList.value = [];
@@ -117,15 +124,15 @@ const openExpiredDetails = () => {
       }
     });
   });
-
+  
   detailsDialog.value?.showModal();
 };
 
-// Öffnet Modal für Bald fällige
+// B) Modal für Bald fällige
 const openSoonDetails = () => {
   if (stats.value.soon === 0) return;
 
-  detailsTitle.value = '⏳ Bald fällig (7 Tage)';
+  detailsTitle.value = '⏳ Bald fällig (14 Tage)';
   detailsList.value = [];
 
   items.value.forEach(item => {
@@ -140,6 +147,32 @@ const openSoonDetails = () => {
     });
   });
 
+  detailsDialog.value?.showModal();
+};
+
+// C) Modal für Geöffnete (NEU)
+const openOpenedDetails = () => {
+  if (stats.value.opened === 0) return;
+  
+  detailsTitle.value = '🥄 Geöffnete Produkte';
+  detailsList.value = [];
+
+  items.value.forEach(item => {
+    item.instances.forEach(inst => {
+      if (inst.opened_at) {
+        detailsList.value.push({
+          name: item.name,
+          date: `Seit: ${formatDate(inst.opened_at)}`,
+          rawDate: new Date(inst.opened_at).getTime(),
+          location: getLocName(item.location_id)
+        });
+      }
+    });
+  });
+  
+  // Sortieren: Neueste zuerst geöffnet
+  detailsList.value.sort((a, b) => (b.rawDate || 0) - (a.rawDate || 0));
+  
   detailsDialog.value?.showModal();
 };
 
@@ -158,6 +191,7 @@ const goLocations = () => router.push({ name: 'locations' });
     </div>
 
     <div class="grid grid-cols-2 gap-4">
+       
        <div 
          class="card bg-base-100 shadow-md transition-all"
          :class="stats.expired > 0 ? 'cursor-pointer hover:shadow-lg hover:bg-red-50' : 'opacity-60'"
@@ -181,6 +215,21 @@ const goLocations = () => router.push({ name: 'locations' });
             <div class="text-xs text-gray-500">Bald fällig</div>
          </div>
        </div>
+
+       <div 
+         class="card bg-base-100 shadow-md transition-all col-span-2"
+         :class="stats.opened > 0 ? 'cursor-pointer hover:shadow-lg hover:bg-blue-50' : 'opacity-60'"
+         @click="openOpenedDetails"
+       >
+         <div class="card-body p-4 flex-row items-center justify-between">
+            <div class="text-left">
+               <div class="text-2xl font-bold text-info">{{ stats.opened }}</div>
+               <div class="text-xs text-gray-500">Produkte geöffnet</div>
+            </div>
+            <div class="text-3xl">🥄</div>
+         </div>
+       </div>
+
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

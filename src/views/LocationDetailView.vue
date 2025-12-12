@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useInventory } from '../composables/useInventory';
 import ItemRow from '../components/ItemRow.vue';
 
-// Router automatically passes the dynamic path parameter ":id" as a prop
+// Router übergibt die ID automatisch als Prop
 const props = defineProps<{ id: string }>();
 
 const { 
@@ -15,25 +15,42 @@ const {
   deleteCategory
 } = useInventory();
 
-// --- Data for this location ---
+// --- Daten für diesen Ort ---
 const selectedLocation = computed(() => locations.value.find(l => l.id === props.id));
 const currentLocationData = computed(() => getItemsByLocation(props.id).value);
 const currentLocationCategories = computed(() => categories.value.filter(c => c.location_id === props.id));
 
-// --- Modal Logic (Add Item) ---
+// --- Modal Logik (Item hinzufügen) ---
 const addItemDialog = ref<HTMLDialogElement | null>(null);
+
+// Form Fields
 const newItemName = ref('');
 const newItemQuantity = ref(1);
 const newItemExpiry = ref('');
 const selectedCategoryId = ref<string | null>(null);
 const newCategoryName = ref('');
 
+// NEU: Geöffnet Status
+const newItemIsOpened = ref(false);
+const newItemOpenedDate = ref('');
+
+// Helper: Wenn Checkbox aktiviert wird, heutiges Datum setzen
+watch(newItemIsOpened, (val) => {
+  if (val && !newItemOpenedDate.value) {
+    newItemOpenedDate.value = new Date().toISOString().split('T')[0];
+  }
+});
+
 const openAddItemModal = () => {
+  // Reset
   newItemName.value = '';
   newItemQuantity.value = 1;
   newItemExpiry.value = '';
   selectedCategoryId.value = null;
   newCategoryName.value = '';
+  newItemIsOpened.value = false;
+  newItemOpenedDate.value = '';
+  
   addItemDialog.value?.showModal();
 };
 
@@ -55,13 +72,26 @@ const handleDeleteCategory = async (catId: string) => {
 
 const saveNewItem = async () => {
   if (!newItemName.value) return;
+
   try {
     let finalCategoryId = selectedCategoryId.value;
+    
+    // Falls neue Kategorie erstellt werden soll
     if (newCategoryName.value.trim()) {
       const newCat = await addCategory(newCategoryName.value, props.id);
       if (newCat) finalCategoryId = newCat.id;
     }
-    await addItem(newItemName.value, props.id, finalCategoryId, newItemQuantity.value, newItemExpiry.value);
+
+    // Item erstellen (inkl. openedAt Parameter)
+    await addItem(
+      newItemName.value, 
+      props.id, 
+      finalCategoryId, 
+      newItemQuantity.value, 
+      newItemExpiry.value,
+      newItemIsOpened.value ? newItemOpenedDate.value : null
+    );
+
     addItemDialog.value?.close();
   } catch (e) { 
     alert('Fehler beim Speichern'); 
@@ -71,6 +101,7 @@ const saveNewItem = async () => {
 
 <template>
   <div v-if="currentLocationData">
+    
     <div v-if="currentLocationData.uncategorized.length > 0" class="card bg-base-100 shadow-sm mb-4 overflow-hidden">
       <ItemRow v-for="item in currentLocationData.uncategorized" :key="item.id" :item="item" />
     </div>
@@ -116,6 +147,17 @@ const saveNewItem = async () => {
            </div>
         </div>
 
+        <div class="form-control bg-base-200 rounded-lg p-2 mb-4">
+           <label class="label cursor-pointer justify-start gap-4">
+              <input type="checkbox" v-model="newItemIsOpened" class="checkbox checkbox-sm checkbox-info" />
+              <span class="label-text font-bold">Bereits geöffnet?</span>
+           </label>
+           
+           <div v-if="newItemIsOpened" class="mt-2 pl-10">
+              <input v-model="newItemOpenedDate" type="date" class="input input-sm input-bordered w-full" />
+           </div>
+        </div>
+
         <div class="form-control w-full mb-2">
           <label class="label"><span class="label-text font-bold">Kategorie</span></label>
           
@@ -134,6 +176,7 @@ const saveNewItem = async () => {
                   class="btn btn-sm join-item px-2 border-l-0 hover:bg-error hover:text-white hover:border-error transition-colors"
                   :class="selectedCategoryId === cat.id ? 'btn-primary' : 'btn-outline border-base-300'"
                   type="button"
+                  title="Kategorie löschen"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -143,7 +186,9 @@ const saveNewItem = async () => {
           <div class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box">
              <input type="checkbox" :checked="!!newCategoryName" /> 
              <div class="collapse-title text-sm text-gray-500">Oder neu...</div>
-             <div class="collapse-content"><input v-model="newCategoryName" @input="onNewCategoryInput" type="text" class="input input-bordered input-sm w-full mt-2" /></div>
+             <div class="collapse-content">
+               <input v-model="newCategoryName" @input="onNewCategoryInput" type="text" class="input input-bordered input-sm w-full mt-2" />
+             </div>
           </div>
         </div>
 

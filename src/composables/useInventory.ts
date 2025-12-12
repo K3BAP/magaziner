@@ -1,12 +1,12 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
 
-// --- NEUE TYPEN ---
 export interface ItemInstance {
   id: string;
   item_id: string;
   quantity: number;
   expiry_date: string | null;
+  opened_at?: string | null;
 }
 
 export interface Item {
@@ -14,7 +14,7 @@ export interface Item {
   name: string;
   location_id: string;
   category_id: string | null;
-  instances: ItemInstance[]; // Hier liegen jetzt die Daten!
+  instances: ItemInstance[];
 }
 
 export interface Location {
@@ -77,7 +77,7 @@ export function useInventory() {
   };
 
   // 2. ITEM ERSTELLEN (Parent + Erste Instanz)
-  const addItem = async (name: string, locationId: string, categoryId: string | null, quantity: number, expiryDate: string | null) => {
+  const addItem = async (name: string, locationId: string, categoryId: string | null, quantity: number, expiryDate: string | null, openedAt: string | null) => {
     // A) Item Container erstellen
     const { data: newItem, error: itemError } = await supabase
       .from('items')
@@ -91,19 +91,30 @@ export function useInventory() {
     }
 
     // B) Erste Instanz erstellen
-    await addInstance(newItem.id, quantity, expiryDate);
+    await addInstance(newItem.id, quantity, expiryDate, openedAt);
 
     // Lokal neuladen (einfachster Weg für Konsistenz)
     await fetchInventory(); 
   };
 
   // 3. NEUE INSTANZ HINZUFÜGEN (Zu existierendem Item)
-  const addInstance = async (itemId: string, quantity: number, expiryDate: string | null) => {
+  const addInstance = async (
+    itemId: string, 
+    quantity: number, 
+    expiryDate: string | null,
+    openedAt: string | null = null
+  ) => {
     const finalDate = expiryDate === '' ? null : expiryDate;
-    
+    const finalOpened = openedAt === '' ? null : openedAt;
+
     const { data, error } = await supabase
       .from('item_instances')
-      .insert({ item_id: itemId, quantity, expiry_date: finalDate })
+      .insert({ 
+        item_id: itemId, 
+        quantity, 
+        expiry_date: finalDate,
+        opened_at: finalOpened
+      })
       .select()
       .single();
 
@@ -126,24 +137,28 @@ export function useInventory() {
   };
 
   // 4. UPDATE QUANTITY (Einer spezifischen Instanz)
-  const updateInstanceQuantity = async (itemId: string, instanceId: string, newQuantity: number) => {
+  const updateInstanceDetails = async (
+    itemId: string, 
+    instanceId: string, 
+    updates: { quantity?: number, opened_at?: string | null }
+  ) => {
     const item = items.value.find(i => i.id === itemId);
     const instance = item?.instances.find(inst => inst.id === instanceId);
-    
     if (!instance) return;
 
-    // Optimistisch
-    const oldQty = instance.quantity;
-    instance.quantity = newQuantity;
+    // Optimistisch Update
+    if (updates.quantity !== undefined) instance.quantity = updates.quantity;
+    if (updates.opened_at !== undefined) instance.opened_at = updates.opened_at;
 
     const { error } = await supabase
       .from('item_instances')
-      .update({ quantity: newQuantity })
+      .update(updates)
       .eq('id', instanceId);
 
     if (error) {
-      instance.quantity = oldQty; // Rollback
-      alert('Fehler beim Speichern');
+      console.error('Fehler beim Update:', error);
+      // Hier könnte man ein Rollback implementieren
+      alert('Speichern fehlgeschlagen');
     }
   };
 
@@ -293,7 +308,7 @@ export function useInventory() {
   return {
     locations, items, categories, loading,
     fetchInventory, addLocation, addCategory, deleteCategory, addItem, 
-    addInstance, updateInstanceQuantity, deleteInstance, // <-- Neue Actions
+    addInstance, updateInstanceDetails, deleteInstance, // <-- Neue Actions
     getItemsByLocation, searchItems, getLocationName,
     updateLocation, deleteLocation, updateItem
   };
