@@ -14,6 +14,7 @@ export interface Item {
   name: string;
   location_id: string;
   category_id: string | null;
+  minimum_stock: number | null;
   instances: ItemInstance[];
 }
 
@@ -41,7 +42,7 @@ export function useInventory() {
   const fetchInventory = async () => {
     try {
       loading.value = true;
-      
+
       const [locRes, catRes, itemRes] = await Promise.all([
         supabase.from('locations').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
@@ -55,20 +56,20 @@ export function useInventory() {
 
       locations.value = locRes.data || [];
       categories.value = catRes.data || [];
-      
+
       // Instanzen innerhalb der Items sortieren (Bald ablaufende zuerst)
       const rawItems = itemRes.data || [];
       rawItems.forEach((item: any) => {
         if (item.instances) {
-            item.instances.sort((a: ItemInstance, b: ItemInstance) => {
-                if (!a.expiry_date) return 1;
-                if (!b.expiry_date) return -1;
-                return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
-            });
+          item.instances.sort((a: ItemInstance, b: ItemInstance) => {
+            if (!a.expiry_date) return 1;
+            if (!b.expiry_date) return -1;
+            return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+          });
         }
       });
       items.value = rawItems;
-      
+
     } catch (error) {
       console.error('Fehler beim Laden:', error);
     } finally {
@@ -77,11 +78,11 @@ export function useInventory() {
   };
 
   // 2. ITEM ERSTELLEN (Parent + Erste Instanz)
-  const addItem = async (name: string, locationId: string, categoryId: string | null, quantity: number, expiryDate: string | null, openedAt: string | null) => {
+  const addItem = async (name: string, locationId: string, categoryId: string | null, quantity: number, expiryDate: string | null, openedAt: string | null, minimumStock: number | null) => {
     // A) Item Container erstellen
     const { data: newItem, error: itemError } = await supabase
       .from('items')
-      .insert({ name, location_id: locationId, category_id: categoryId })
+      .insert({ name, location_id: locationId, category_id: categoryId, minimum_stock: minimumStock })
       .select()
       .single();
 
@@ -94,13 +95,13 @@ export function useInventory() {
     await addInstance(newItem.id, quantity, expiryDate, openedAt);
 
     // Lokal neuladen (einfachster Weg für Konsistenz)
-    await fetchInventory(); 
+    await fetchInventory();
   };
 
   // 3. NEUE INSTANZ HINZUFÜGEN (Zu existierendem Item)
   const addInstance = async (
-    itemId: string, 
-    quantity: number, 
+    itemId: string,
+    quantity: number,
     expiryDate: string | null,
     openedAt: string | null = null
   ) => {
@@ -109,9 +110,9 @@ export function useInventory() {
 
     const { data, error } = await supabase
       .from('item_instances')
-      .insert({ 
-        item_id: itemId, 
-        quantity, 
+      .insert({
+        item_id: itemId,
+        quantity,
         expiry_date: finalDate,
         opened_at: finalOpened
       })
@@ -119,7 +120,7 @@ export function useInventory() {
       .single();
 
     if (error) {
-      console.error(error); 
+      console.error(error);
       return;
     }
 
@@ -129,22 +130,22 @@ export function useInventory() {
       item.instances.push(data);
       // Neu sortieren
       item.instances.sort((a, b) => {
-          if (!a.expiry_date) return 1;
-          if (!b.expiry_date) return -1;
-          return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+        if (!a.expiry_date) return 1;
+        if (!b.expiry_date) return -1;
+        return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
       });
     }
   };
 
   // 4. UPDATE QUANTITY (Einer spezifischen Instanz)
   const updateInstanceDetails = async (
-    itemId: string, 
-    instanceId: string, 
+    itemId: string,
+    instanceId: string,
     updates: { quantity?: number, opened_at?: string | null }
   ) => {
     const item = items.value.find(i => i.id === itemId);
     const instance = item?.instances.find(inst => inst.id === instanceId);
-    if (!instance) return;
+    if (!item || !instance) return;
 
     // Optimistisch Update
     if (updates.quantity !== undefined) instance.quantity = updates.quantity;
@@ -159,6 +160,22 @@ export function useInventory() {
       console.error('Fehler beim Update:', error);
       // Hier könnte man ein Rollback implementieren
       alert('Speichern fehlgeschlagen');
+    } else {
+      // SUCCESS: Check Automation
+      if (item.minimum_stock !== null && updates.quantity !== undefined) {
+        const totalQuantity = item.instances.reduce((acc, curr) => acc + curr.quantity, 0);
+        if (totalQuantity < item.minimum_stock) {
+          // Check if already on list? (Optional, but good UX)
+          // We just Fire & Forget insert. If duplicates are allowed, it adds another. 
+          // If unique constraint on title, it might fail silently or error.
+          // Assumption: duplicates allowed or acceptable for now.
+
+          // Notify User
+          alert(`⚠️ Achtung! "${item.name}" ist knapp (${totalQuantity} übrig). Wurde auf die Einkaufsliste gesetzt.`);
+
+          await supabase.from('shopping_list').insert({ title: item.name });
+        }
+      }
     }
   };
 
@@ -173,52 +190,52 @@ export function useInventory() {
 
     // DB Löschen
     const { error } = await supabase.from('item_instances').delete().eq('id', instanceId);
-    
+
     if (error) {
-        item.instances = prevInstances; // Rollback
-        return;
+      item.instances = prevInstances; // Rollback
+      return;
     }
 
     // Wenn das Item jetzt KEINE Instanzen mehr hat, löschen wir das Parent-Item auch
     if (item.instances.length === 0) {
-        await supabase.from('items').delete().eq('id', itemId);
-        items.value = items.value.filter(i => i.id !== itemId);
+      await supabase.from('items').delete().eq('id', itemId);
+      items.value = items.value.filter(i => i.id !== itemId);
     }
   };
 
   // --- Helper ---
-  const addLocation = async (name: string, icon: string) => { /* ... wie vorher ... */ 
-      const { data } = await supabase.from('locations').insert({name, icon}).select().single();
-      if(data) locations.value.push(data);
+  const addLocation = async (name: string, icon: string) => { /* ... wie vorher ... */
+    const { data } = await supabase.from('locations').insert({ name, icon }).select().single();
+    if (data) locations.value.push(data);
   };
-  
+
   const addCategory = async (name: string, locationId: string) => { /* ... wie vorher ... */
-      const { data } = await supabase.from('categories').insert({name, location_id: locationId}).select().single();
-      if(data) { categories.value.push(data); return data; }
+    const { data } = await supabase.from('categories').insert({ name, location_id: locationId }).select().single();
+    if (data) { categories.value.push(data); return data; }
   };
 
   const deleteCategory = async (catId: string) => { /* ... wie vorher ... */
-      // Check muss angepasst werden: Item hat keine category_id mehr direkt (doch hat es, siehe Interface)
-      // Aber Check ob Item existiert ist gleich
-      const hasItems = items.value.some(i => i.category_id === catId);
-      if(hasItems) { alert('Kategorie nicht leer!'); return false; }
-      await supabase.from('categories').delete().eq('id', catId);
-      categories.value = categories.value.filter(c => c.id !== catId);
-      return true;
+    // Check muss angepasst werden: Item hat keine category_id mehr direkt (doch hat es, siehe Interface)
+    // Aber Check ob Item existiert ist gleich
+    const hasItems = items.value.some(i => i.category_id === catId);
+    if (hasItems) { alert('Kategorie nicht leer!'); return false; }
+    await supabase.from('categories').delete().eq('id', catId);
+    categories.value = categories.value.filter(c => c.id !== catId);
+    return true;
   };
 
   // Getter (Filterlogik fast identisch, nur quantity berechnung anders)
   const getLocationName = (locId: string) => locations.value.find(l => l.id === locId)?.name || '';
 
   const getItemsByLocation = (locId: string) => computed(() => {
-      const locItems = items.value.filter(i => i.location_id === locId);
-      const uncategorized = locItems.filter(i => !i.category_id);
-      const locCategories = categories.value.filter(c => c.location_id === locId);
-      const grouped = locCategories.map(cat => ({
-        ...cat,
-        items: locItems.filter(i => i.category_id === cat.id)
-      })).filter(group => group.items.length > 0);
-      return { uncategorized, grouped };
+    const locItems = items.value.filter(i => i.location_id === locId);
+    const uncategorized = locItems.filter(i => !i.category_id);
+    const locCategories = categories.value.filter(c => c.location_id === locId);
+    const grouped = locCategories.map(cat => ({
+      ...cat,
+      items: locItems.filter(i => i.category_id === cat.id)
+    })).filter(group => group.items.length > 0);
+    return { uncategorized, grouped };
   });
 
   const searchItems = (query: string) => {
@@ -258,7 +275,7 @@ export function useInventory() {
     // 1. Lokal entfernen
     const prevLocs = [...locations.value];
     locations.value = locations.value.filter(l => l.id !== id);
-    
+
     // Auch die Items lokal entfernen, damit die "Alle Produkte" Liste stimmt
     const prevItems = [...items.value];
     items.value = items.value.filter(i => i.location_id !== id);
@@ -280,7 +297,7 @@ export function useInventory() {
     }
   };
 
-  const updateItem = async (itemId: string, newName: string, newCategoryId: string | null) => {
+  const updateItem = async (itemId: string, newName: string, newCategoryId: string | null, newMinimumStock: number | null) => {
     const item = items.value.find(i => i.id === itemId);
     if (!item) return;
 
@@ -290,10 +307,11 @@ export function useInventory() {
 
     item.name = newName;
     item.category_id = newCategoryId;
+    item.minimum_stock = newMinimumStock;
 
     const { error } = await supabase
       .from('items')
-      .update({ name: newName, category_id: newCategoryId })
+      .update({ name: newName, category_id: newCategoryId, minimum_stock: newMinimumStock })
       .eq('id', itemId);
 
     if (error) {
@@ -307,7 +325,7 @@ export function useInventory() {
 
   return {
     locations, items, categories, loading,
-    fetchInventory, addLocation, addCategory, deleteCategory, addItem, 
+    fetchInventory, addLocation, addCategory, deleteCategory, addItem,
     addInstance, updateInstanceDetails, deleteInstance, // <-- Neue Actions
     getItemsByLocation, searchItems, getLocationName,
     updateLocation, deleteLocation, updateItem

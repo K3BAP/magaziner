@@ -76,6 +76,7 @@ const saveNewInstance = async () => {
 const editItemDialog = ref<HTMLDialogElement | null>(null);
 const editName = ref('');
 const editCategoryId = ref<string | null>(null);
+const editMinimumStock = ref<number | null>(null);
 const editNewCategoryName = ref('');
 const editIsOpened = ref(false);
 const editOpenedDate = ref('');
@@ -87,6 +88,7 @@ const availableCategories = computed(() => {
 const openEditItemModal = () => {
   editName.value = props.item.name;
   editCategoryId.value = props.item.category_id;
+  editMinimumStock.value = props.item.minimum_stock;
   editNewCategoryName.value = '';
   
   if (props.item.instances.length > 0) {
@@ -129,7 +131,7 @@ const saveItemChanges = async () => {
     }
   }
 
-  await updateItem(props.item.id, editName.value, finalCategoryId);
+  await updateItem(props.item.id, editName.value, finalCategoryId, editMinimumStock.value);
 
   if (props.item.instances.length > 0) {
      const inst = props.item.instances[0];
@@ -260,6 +262,14 @@ const isMultiInstance = computed(() => props.item.instances.length > 1);
         <div class="form-control mb-4">
           <label class="label"><span class="label-text font-bold">Name</span></label>
           <input v-model="editName" type="text" class="input input-bordered w-full" />
+        </div>
+
+        <div class="form-control mb-4">
+          <label class="label"><span class="label-text font-bold">Mindestbestand</span></label>
+          <input v-model="editMinimumStock" type="number" min="0" placeholder="Optional" class="input input-bordered w-full" />
+          <label class="label">
+            <span class="label-text-alt text-gray-500">Für die Einkaufsliste.</span>
+          </label>
         </div>
 
         <div class="form-control mb-4">

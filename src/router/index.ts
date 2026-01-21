@@ -7,6 +7,7 @@ import LocationsView from '../views/LocationsView.vue'
 import AllItemsView from '../views/AllItemsView.vue'
 import TodoView from '../views/TodoView.vue'
 import LoginView from '../views/LoginView.vue'
+import ShoppingListView from '../views/ShoppingListView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -47,6 +48,12 @@ const router = createRouter({
       path: '/todos',
       name: 'todos',
       component: TodoView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/shopping-list',
+      name: 'shoppingList',
+      component: ShoppingListView,
       meta: { requiresAuth: true }
     }
   ]
