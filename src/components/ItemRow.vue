@@ -15,6 +15,11 @@ const {
   updateInstanceDetails // <-- DAS NUTZEN WIR JETZT FÜR ALLES
 } = useInventory();
 
+import { useDashboard } from '../composables/useDashboard';
+const { isProductPinned, toggleProductPin } = useDashboard();
+
+const isPinned = computed(() => isProductPinned(props.item.id));
+
 // --- Helper: Datum & Status ---
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return null;
@@ -167,8 +172,18 @@ const isMultiInstance = computed(() => props.item.instances.length > 1);
     
     <div v-if="!isMultiInstance && item.instances.length > 0" class="flex items-center justify-between p-3">
        <div class="flex-1 min-w-0 pr-2">
-          <div @click="openEditItemModal" class="font-medium text-lg truncate cursor-pointer hover:text-primary hover:underline decoration-dashed underline-offset-4 decoration-2">
-            {{ item.name }}
+          <div class="flex items-center gap-2">
+            <div @click="openEditItemModal" class="font-medium text-lg truncate cursor-pointer hover:text-primary hover:underline decoration-dashed underline-offset-4 decoration-2">
+              {{ item.name }}
+            </div>
+            <button 
+              @click="toggleProductPin(item.id)" 
+              class="btn btn-xs btn-circle"
+              :class="isPinned ? 'btn-primary' : 'btn-ghost text-gray-300'"
+              title="Auf Dashboard anpinnen"
+            >
+              📌
+            </button>
           </div>
           
           <div class="flex flex-wrap gap-2 text-xs mt-1 items-center">
@@ -199,8 +214,18 @@ const isMultiInstance = computed(() => props.item.instances.length > 1);
     <div v-else class="p-3">
        <div class="flex justify-between items-center mb-2">
           <div>
-            <div @click="openEditItemModal" class="font-medium text-lg cursor-pointer hover:text-primary hover:underline decoration-dashed underline-offset-4 decoration-2">
-              {{ item.name }}
+            <div class="flex items-center gap-2">
+              <div @click="openEditItemModal" class="font-medium text-lg cursor-pointer hover:text-primary hover:underline decoration-dashed underline-offset-4 decoration-2">
+                {{ item.name }}
+              </div>
+              <button 
+                @click="toggleProductPin(item.id)" 
+                class="btn btn-xs btn-circle"
+                :class="isPinned ? 'btn-primary' : 'btn-ghost text-gray-300'"
+                title="Auf Dashboard anpinnen"
+              >
+                📌
+              </button>
             </div>
             <span v-if="showLocation" class="badge badge-ghost badge-xs">📍 {{ getLocationName(item.location_id) }}</span>
           </div>
