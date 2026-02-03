@@ -27,6 +27,7 @@ const addItemDialog = ref<HTMLDialogElement | null>(null);
 const newItemName = ref('');
 const newItemQuantity = ref(1);
 const newItemExpiry = ref('');
+const newItemMinimumStock = ref<number | null>(null); // NEU
 const selectedCategoryId = ref<string | null>(null);
 const newCategoryName = ref('');
 
@@ -46,6 +47,7 @@ const openAddItemModal = () => {
   newItemName.value = '';
   newItemQuantity.value = 1;
   newItemExpiry.value = '';
+  newItemMinimumStock.value = null;
   selectedCategoryId.value = null;
   newCategoryName.value = '';
   newItemIsOpened.value = false;
@@ -61,6 +63,7 @@ const onCategorySelect = (id: string) => {
 
 const onNewCategoryInput = () => { 
   if (newCategoryName.value) selectedCategoryId.value = null; 
+  // newItemMinimumStock reset unnötig
 };
 
 const handleDeleteCategory = async (catId: string) => {
@@ -89,7 +92,8 @@ const saveNewItem = async () => {
       finalCategoryId, 
       newItemQuantity.value, 
       newItemExpiry.value,
-      newItemIsOpened.value ? newItemOpenedDate.value : null
+      newItemIsOpened.value ? newItemOpenedDate.value : null,
+      newItemMinimumStock.value // NEU
     );
 
     addItemDialog.value?.close();
@@ -132,7 +136,7 @@ const saveNewItem = async () => {
           <input v-model="newItemName" type="text" placeholder="z.B. Milch" class="input input-bordered w-full" autofocus @keyup.enter="saveNewItem"/>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="grid grid-cols-2 gap-4 mb-2">
            <div class="form-control">
              <label class="label"><span class="label-text font-bold">Anzahl</span></label>
              <div class="join">
@@ -145,6 +149,11 @@ const saveNewItem = async () => {
              <label class="label"><span class="label-text font-bold">Ablauf</span></label>
              <input v-model="newItemExpiry" type="date" class="input input-bordered input-sm w-full" />
            </div>
+        </div>
+
+        <div class="form-control mb-4">
+           <label class="label"><span class="label-text font-bold">Mindestbestand</span></label>
+           <input v-model="newItemMinimumStock" type="number" min="0" placeholder="Optional (für Einkaufsliste)" class="input input-bordered input-sm w-full" />
         </div>
 
         <div class="form-control bg-base-200 rounded-lg p-2 mb-4">

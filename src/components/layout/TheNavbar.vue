@@ -13,6 +13,7 @@ const pageTitle = computed(() => {
     case 'locations': return 'Vorräte';
     case 'allItems': return 'Alle Vorräte'; // 1. Umbenannt
     case 'todos': return 'Aufgaben';
+    case 'shoppingList': return 'Einkaufsliste';
     case 'location': 
       const loc = locations.value.find(l => l.id === route.params.id);
       return loc?.name || 'Lade...';

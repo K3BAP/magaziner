@@ -137,6 +137,20 @@ export function useInventory() {
     }
   };
 
+  // 4. HELPER: Automation Check
+  const checkAndAddToShoppingList = async (itemName: string, remainingStock: number) => {
+    const { data: existing } = await supabase
+      .from('shopping_list')
+      .select('id')
+      .eq('title', itemName)
+      .maybeSingle();
+
+    if (!existing) {
+      alert(`⚠️ Achtung! "${itemName}" ist knapp (${remainingStock} übrig). Wurde auf die Einkaufsliste gesetzt.`);
+      await supabase.from('shopping_list').insert({ title: itemName });
+    }
+  };
+
   // 4. UPDATE QUANTITY (Einer spezifischen Instanz)
   const updateInstanceDetails = async (
     itemId: string,
@@ -170,19 +184,29 @@ export function useInventory() {
           // If unique constraint on title, it might fail silently or error.
           // Assumption: duplicates allowed or acceptable for now.
 
-          // Notify User
-          alert(`⚠️ Achtung! "${item.name}" ist knapp (${totalQuantity} übrig). Wurde auf die Einkaufsliste gesetzt.`);
-
-          await supabase.from('shopping_list').insert({ title: item.name });
+          // Automation Check (Deduplicated)
+          checkAndAddToShoppingList(item.name, totalQuantity);
         }
       }
     }
   };
 
   // 5. LÖSCHEN (Instanz oder ganzes Item)
+
   const deleteInstance = async (itemId: string, instanceId: string) => {
     const item = items.value.find(i => i.id === itemId);
     if (!item) return;
+
+    // --- AUTOMATION: Check Minimum Stock vor dem Löschen ---
+    const instToDelete = item.instances.find(inst => inst.id === instanceId);
+    if (instToDelete && item.minimum_stock !== null) {
+      const currentTotal = item.instances.reduce((acc, curr) => acc + curr.quantity, 0);
+      const newTotal = currentTotal - instToDelete.quantity;
+
+      if (newTotal < item.minimum_stock) {
+        checkAndAddToShoppingList(item.name, newTotal);
+      }
+    }
 
     // Optimistisch löschen
     const prevInstances = [...item.instances];
