@@ -8,6 +8,8 @@ import AllItemsView from '../views/AllItemsView.vue'
 import TodoView from '../views/TodoView.vue'
 import LoginView from '../views/LoginView.vue'
 import ShoppingListView from '../views/ShoppingListView.vue'
+import RecipesView from '../views/RecipesView.vue'
+import RecipeDetailView from '../views/RecipeDetailView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -54,6 +56,18 @@ const router = createRouter({
       path: '/shopping-list',
       name: 'shoppingList',
       component: ShoppingListView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/recipes',
+      name: 'recipes',
+      component: RecipesView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/recipes/:id',
+      name: 'recipe-detail',
+      component: RecipeDetailView,
       meta: { requiresAuth: true }
     }
   ]
