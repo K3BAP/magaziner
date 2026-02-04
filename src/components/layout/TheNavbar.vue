@@ -17,6 +17,8 @@ const pageTitle = computed(() => {
     case 'location': 
       const loc = locations.value.find(l => l.id === route.params.id);
       return loc?.name || 'Lade...';
+    case 'recipes': return 'Meine Rezepte';
+    case 'recipe-detail': return 'Meine Rezepte';
     default: return 'Magaziner';
   }
 });
@@ -24,6 +26,8 @@ const pageTitle = computed(() => {
 const goUp = () => {
   if (route.name === 'location') {
     router.push({ name: 'locations' });
+  } else if (route.name === 'recipe-detail') {
+    router.push({ name: 'recipes' });
   } else {
     router.push({ name: 'dashboard' });
   }
@@ -42,7 +46,7 @@ const goHome = () => router.push({ name: 'dashboard' });
 <template>
   <div class="navbar bg-base-100 shadow-sm sticky top-0 z-10">
     <div class="flex-none">
-      <button v-if="route.name === 'location'" @click="goUp" class="btn btn-square btn-ghost">
+      <button v-if="['location', 'recipe-detail'].includes(route.name as string)" @click="goUp" class="btn btn-square btn-ghost">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
       </button>
       

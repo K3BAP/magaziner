@@ -45,14 +45,6 @@ const navigateToRecipe = (id: string) => {
 
 <template>
   <div>
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold">📖 Meine Rezepte</h1>
-      <button @click="openAddModal" class="btn btn-primary gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-        Neues Rezept
-      </button>
-    </div>
-
     <div v-if="loading && recipes.length === 0" class="flex justify-center py-10">
       <span class="loading loading-spinner loading-lg text-primary"></span>
     </div>
@@ -63,7 +55,7 @@ const navigateToRecipe = (id: string) => {
       <button @click="openAddModal" class="btn btn-link">Erstelle jetzt dein erstes!</button>
     </div>
 
-    <div v-else class="flex flex-col gap-4">
+    <div v-else class="flex flex-col gap-4 pb-20">
       <div 
         v-for="recipe in recipes" 
         :key="recipe.id" 
@@ -94,6 +86,13 @@ const navigateToRecipe = (id: string) => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <div class="fixed bottom-6 right-6 z-20">
+      <button @click="openAddModal" class="btn btn-circle btn-primary btn-lg shadow-xl">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+      </button>
     </div>
 
     <!-- Add Modal -->

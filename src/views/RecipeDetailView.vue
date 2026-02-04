@@ -138,14 +138,7 @@ const addAllIngredientsToShoppingList = async () => {
   </div>
 
   <div v-else-if="recipe" class="pb-20">
-    
-    <!-- Header / Navigation -->
-    <div class="flex items-center gap-2 mb-4 text-sm text-gray-500">
-       <button @click="router.push({ name: 'recipes' })" class="hover:underline flex items-center gap-1">
-         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-         Zurück zur Übersicht
-       </button>
-    </div>
+    <!-- Header / Navigation Removed (moved to Navbar) -->
 
     <!-- VIEW MODE -->
     <div v-if="!isEditing">
