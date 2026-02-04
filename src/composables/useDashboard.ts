@@ -1,6 +1,6 @@
 import { ref, watch, onMounted } from 'vue';
 
-export type WidgetType = 'expired' | 'soon' | 'opened' | 'inventory-chart' | 'location-chart' | 'todos' | 'product';
+export type WidgetType = 'expired' | 'soon' | 'opened' | 'inventory-chart' | 'location-chart' | 'todos' | 'product' | 'shortcut' | 'shopping-list';
 
 export interface DashboardWidget {
     id: string;

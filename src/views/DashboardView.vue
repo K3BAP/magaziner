@@ -13,9 +13,11 @@ import WidgetInventoryChart from '../components/widgets/WidgetInventoryChart.vue
 import WidgetLocationChart from '../components/widgets/WidgetLocationChart.vue';
 import WidgetTodos from '../components/widgets/WidgetTodos.vue';
 import WidgetProduct from '../components/widgets/WidgetProduct.vue';
+import WidgetShortcut from '../components/widgets/WidgetShortcut.vue';
+import WidgetShoppingList from '../components/widgets/WidgetShoppingList.vue';
 
 // --- Types ---
-type WidgetType = 'expired' | 'soon' | 'opened' | 'inventory-chart' | 'location-chart' | 'todos' | 'product';
+type WidgetType = 'expired' | 'soon' | 'opened' | 'inventory-chart' | 'location-chart' | 'todos' | 'product' | 'shortcut' | 'shopping-list';
 
 interface DashboardWidget {
   id: string;
@@ -31,7 +33,9 @@ const WIDGET_REGISTRY: Record<WidgetType, any> = {
   'inventory-chart': WidgetInventoryChart,
   'location-chart': WidgetLocationChart,
   'todos': WidgetTodos,
-  'product': WidgetProduct
+  'product': WidgetProduct,
+  'shortcut': WidgetShortcut,
+  'shopping-list': WidgetShoppingList
 };
 
 const DEFAULT_LAYOUT: DashboardWidget[] = [
@@ -61,6 +65,15 @@ const showAddModal = ref(false);
 // New Widget Form
 const newWidgetType = ref<WidgetType>('product');
 const newWidgetProduct = ref('');
+const newWidgetShortcut = ref<{ title: string; routeName: string; icon: string }>({ title: 'Vorräte', routeName: 'locations', icon: '📦' });
+
+const SHORTCUT_OPTIONS = [
+  { title: 'Vorräte', routeName: 'locations', icon: '📦' },
+  { title: 'Aufgaben', routeName: 'todos', icon: '✅' },
+  { title: 'Einkaufsliste', routeName: 'shoppingList', icon: '🛒' },
+  { title: 'Rezepte', routeName: 'recipes', icon: '📖' },
+  { title: 'Alle Artikel', routeName: 'allItems', icon: '📋' },
+];
 
 // --- Storage & Init ---
 onMounted(() => {
@@ -74,7 +87,11 @@ const addWidget = () => {
     return;
   }
 
-  addWidgetCore(newWidgetType.value, newWidgetType.value === 'product' ? { productId: newWidgetProduct.value } : undefined);
+  let props = undefined;
+  if (newWidgetType.value === 'product') props = { productId: newWidgetProduct.value };
+  if (newWidgetType.value === 'shortcut') props = { ...newWidgetShortcut.value };
+
+  addWidgetCore(newWidgetType.value, props);
   
   showAddModal.value = false;
   // Reset
@@ -103,9 +120,15 @@ const handleWidgetClick = (widget: DashboardWidget) => {
   if (widget.type === 'expired') openExpiredDetails();
   else if (widget.type === 'soon') openSoonDetails();
   else if (widget.type === 'opened') openOpenedDetails();
-  // Charts & Todos handle their own clicks (router push) inside the component or we can intercept here if needed.
-  // Currently they have @click inside common components? 
-  // Wait, I didn't add @click emission to WidgetInventoryChart, but WidgetLocationChart does router push directly.
+  else if (widget.type === 'todos') router.push({ name: 'todos' });
+  else if (widget.type === 'shopping-list') router.push({ name: 'shoppingList' });
+  else if (widget.type === 'inventory-chart') router.push({ name: 'locations' }); // Requested: Inventory Chart -> Locations
+  else if (widget.type === 'shortcut' && widget.props?.routeName) router.push({ name: widget.props.routeName });
+  else if (widget.type === 'product' && widget.props?.productId) {
+      // Find item to get location? Or just go to full list? 
+      // Going to AllItems with query would be nice, but simple fallback:
+      router.push({ name: 'allItems' });
+  }
 };
 
 const openExpiredDetails = () => {
@@ -256,8 +279,19 @@ const openOpenedDetails = () => {
                     <option value="inventory-chart">📊 Vorräte (Torte)</option>
                     <option value="location-chart">📊 Orte (Balken)</option>
                     <option value="todos">📝 Aufgaben</option>
+                    <option value="shopping-list">🛒 Einkaufsliste Widget</option>
+                    <option value="shortcut">🔗 Verknüpfung</option>
                     <option value="product">📦 Einzelprodukt</option>
                 </select>
+            </div>
+
+            <div v-if="newWidgetType === 'shortcut'" class="form-control w-full mb-4">
+                 <label class="label"><span class="label-text">Ziel wählen</span></label>
+                 <select class="select select-bordered" v-model="newWidgetShortcut">
+                     <option v-for="opt in SHORTCUT_OPTIONS" :key="opt.routeName" :value="opt">
+                         {{ opt.icon }} {{ opt.title }}
+                     </option>
+                 </select>
             </div>
 
             <div v-if="newWidgetType === 'product'" class="form-control w-full mb-4">
