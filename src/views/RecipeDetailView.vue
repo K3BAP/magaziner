@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRecipes, type Recipe, type Ingredient } from '../composables/useRecipes';
 import { useShoppingList } from '../composables/useShoppingList';
+import { marked } from 'marked';
 
 const route = useRoute();
 const router = useRouter();
@@ -38,6 +39,11 @@ const loadRecipe = async () => {
      startEditing();
   }
 };
+
+const parsedDescription = computed(() => {
+  if (!recipe.value?.description) return '';
+  return marked.parse(recipe.value.description);
+});
 
 onMounted(() => {
   loadRecipe();
@@ -159,9 +165,13 @@ const addAllIngredientsToShoppingList = async () => {
         </button>
       </div>
 
-      <h1 class="text-3xl font-bold mb-2">{{ recipe.name }}</h1>
+      <h1 class="text-3xl font-bold mb-2 break-all">{{ recipe.name }}</h1>
       
-      <p v-if="recipe.description" class="text-gray-600 mb-8 whitespace-pre-wrap leading-relaxed">{{ recipe.description }}</p>
+      <div 
+        v-if="recipe.description" 
+        class="text-base-content mb-8 whitespace-pre-wrap leading-relaxed description-content"
+        v-html="parsedDescription"
+      ></div>
       <p v-else class="text-gray-400 italic mb-8">Keine Beschreibung vorhanden.</p>
 
       <div class="card bg-base-100 border border-base-200 shadow-sm">
@@ -268,3 +278,28 @@ const addAllIngredientsToShoppingList = async () => {
 
   </div>
 </template>
+
+<style>
+.description-content ul {
+  list-style-type: disc;
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+.description-content ol {
+  list-style-type: decimal;
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+.description-content h1, .description-content h2, .description-content h3 {
+  font-weight: bold;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.description-content p {
+  margin-bottom: 1rem;
+}
+.description-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+</style>
