@@ -63,6 +63,12 @@ const handleSignOut = async () => {
         </a>
       </li>
 
+      <li>
+        <a @click="navigate('finance')" class="py-4 text-lg font-medium">
+          💶 Finanzen
+        </a>
+      </li>
+
       <div class="divider my-4"></div>
       
       <li class="mt-auto">

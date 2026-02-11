@@ -72,6 +72,7 @@ const SHORTCUT_OPTIONS = [
   { title: 'Aufgaben', routeName: 'todos', icon: '✅' },
   { title: 'Einkaufsliste', routeName: 'shoppingList', icon: '🛒' },
   { title: 'Rezepte', routeName: 'recipes', icon: '📖' },
+  { title: 'Finanzen', routeName: 'finance', icon: '💶' },
   { title: 'Alle Artikel', routeName: 'allItems', icon: '📋' },
 ];
 

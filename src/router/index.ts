@@ -10,6 +10,7 @@ import LoginView from '../views/LoginView.vue'
 import ShoppingListView from '../views/ShoppingListView.vue'
 import RecipesView from '../views/RecipesView.vue'
 import RecipeDetailView from '../views/RecipeDetailView.vue'
+import FinanceView from '../views/FinanceView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -68,6 +69,12 @@ const router = createRouter({
       path: '/recipes/:id',
       name: 'recipe-detail',
       component: RecipeDetailView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/finance',
+      name: 'finance',
+      component: FinanceView,
       meta: { requiresAuth: true }
     }
   ]

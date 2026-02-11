@@ -19,6 +19,7 @@ const pageTitle = computed(() => {
       return loc?.name || 'Lade...';
     case 'recipes': return 'Meine Rezepte';
     case 'recipe-detail': return 'Meine Rezepte';
+    case 'finance': return 'Finanzen';
     default: return 'Magaziner';
   }
 });
