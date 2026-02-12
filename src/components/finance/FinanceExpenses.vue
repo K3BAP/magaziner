@@ -52,6 +52,7 @@ const formatDate = (dateStr: string) => {
               <div class="font-bold text-sm">
                 <!-- Title for Expense, or "Payment" -->
                 {{ trans.type === 'expense' ? trans.title || 'Ausgabe' : 'Zahlung' }}
+                <span v-if="trans.type === 'expense' && trans.category" class="ml-1">{{ trans.category.icon }}</span>
               </div>
               <div class="text-xs text-gray-500">
                  <span class="font-medium text-gray-700">{{ trans.payer?.name ?? '?' }}</span>

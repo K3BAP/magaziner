@@ -422,7 +422,7 @@ const handleSavePayment = async () => {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-64px)] flex flex-col relative" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+  <div class="h-[calc(100vh-96px)] flex flex-col relative" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     
     <!-- Tab Navigation -->
     <div class="tabs tabs-boxed justify-center m-2 bg-base-200">
@@ -450,18 +450,18 @@ const handleSavePayment = async () => {
     </div>
 
     <!-- FAB -->
-    <div class="absolute bottom-6 right-6 flex flex-col items-end gap-3 z-30">
+    <div class="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-30">
        
        <!-- Menu Items -->
        <Transition name="slide-up">
-         <div v-if="isFabOpen" class="flex flex-col gap-2 items-end mb-2">
-            <button @click="showMemberModal = true; isFabOpen = false" class="btn btn-sm btn-info shadow-lg gap-2">
+         <div v-if="isFabOpen" class="flex flex-col gap-3 items-end mb-2">
+            <button @click="showMemberModal = true; isFabOpen = false" class="btn btn-md btn-info shadow-lg gap-2">
               👤 Person
             </button>
-            <button @click="showPaymentModal = true; isFabOpen = false" class="btn btn-sm btn-success shadow-lg gap-2">
+            <button @click="showPaymentModal = true; isFabOpen = false" class="btn btn-md btn-success shadow-lg gap-2">
               💸 Zahlung
             </button>
-            <button @click="showExpenseModal = true; isFabOpen = false" class="btn btn-sm btn-primary shadow-lg gap-2">
+            <button @click="showExpenseModal = true; isFabOpen = false" class="btn btn-md btn-primary shadow-lg gap-2">
               🛒 Ausgabe
             </button>
          </div>
