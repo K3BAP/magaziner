@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, RouterLink } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
 
 const { signIn, signUp } = useAuth();
@@ -70,6 +70,12 @@ const handleAuth = async () => {
 
         <div class="text-center mt-4 text-sm cursor-pointer link link-primary" @click="isLoginMode = !isLoginMode">
           {{ isLoginMode ? 'Noch kein Konto?' : 'Zum Login' }}
+        </div>
+        
+        <div v-if="isLoginMode" class="text-center mt-2 text-sm">
+          <RouterLink to="/forgot-password" class="link link-hover text-base-content/70">
+            Passwort vergessen?
+          </RouterLink>
         </div>
       </div>
     </div>

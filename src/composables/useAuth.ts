@@ -49,11 +49,31 @@ export function useAuth() {
     user.value = null
   }
 
+  // 4. Passwort zurücksetzen
+  const resetPassword = async (email: string) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/update-password',
+    })
+    if (error) throw error
+    return data
+  }
+
+  // 5. Neues Passwort setzen
+  const updatePassword = async (newPassword: string) => {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    })
+    if (error) throw error
+    return data
+  }
+
   return { 
     user, 
     isAuthReady, // <--- Exportieren
     signUp, 
     signIn, 
-    signOut 
+    signOut,
+    resetPassword,
+    updatePassword
   }
 }

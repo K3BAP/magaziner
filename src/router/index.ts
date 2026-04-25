@@ -11,6 +11,8 @@ import ShoppingListView from '../views/ShoppingListView.vue'
 import RecipesView from '../views/RecipesView.vue'
 import RecipeDetailView from '../views/RecipeDetailView.vue'
 import FinanceView from '../views/FinanceView.vue'
+import ForgotPasswordView from '../views/ForgotPasswordView.vue'
+import UpdatePasswordView from '../views/UpdatePasswordView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -21,6 +23,16 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView
+    },
+    {
+      path: '/forgot-password',
+      name: 'forgotPassword',
+      component: ForgotPasswordView
+    },
+    {
+      path: '/update-password',
+      name: 'updatePassword',
+      component: UpdatePasswordView
     },
     {
       path: '/',
