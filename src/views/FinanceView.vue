@@ -39,30 +39,30 @@ const checkOnboarding = () => {
   }
 };
 
-// Swipe Logic
-const touchStartX = ref(0);
-const touchEndX = ref(0);
+// Scroll & Tab Logic
+const scrollContainer = ref<HTMLElement | null>(null);
 
-const handleTouchStart = (e: TouchEvent) => {
-  touchStartX.value = e.changedTouches[0].screenX;
-};
-
-const handleTouchEnd = (e: TouchEvent) => {
-  touchEndX.value = e.changedTouches[0].screenX;
-  handleSwipe();
-};
-
-const handleSwipe = () => {
-  const threshold = 50;
-  if (touchEndX.value < touchStartX.value - threshold) {
-    // Swipe Left -> Next Tab
-    if (activeTab.value < tabs.length - 1) activeTab.value++;
-  } else if (touchEndX.value > touchStartX.value + threshold) {
-    // Swipe Right -> Prev Tab
-    if (activeTab.value > 0) activeTab.value--;
+const handleScroll = (e: Event) => {
+  const target = e.target as HTMLElement;
+  const scrollLeft = target.scrollLeft;
+  const width = target.clientWidth;
+  if (width === 0) return;
+  const newTab = Math.round(scrollLeft / width);
+  if (activeTab.value !== newTab) {
+    activeTab.value = newTab;
   }
 };
 
+const scrollToTab = (index: number) => {
+  activeTab.value = index;
+  if (scrollContainer.value) {
+    const width = scrollContainer.value.clientWidth;
+    scrollContainer.value.scrollTo({
+      left: index * width,
+      behavior: 'smooth'
+    });
+  }
+};
 
 
 // --- FAB & Menu ---
@@ -422,31 +422,36 @@ const handleSavePayment = async () => {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-96px)] flex flex-col relative" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+  <div class="h-[calc(100vh-96px)] flex flex-col relative w-full overflow-hidden">
     
     <!-- Tab Navigation -->
-    <div class="tabs tabs-boxed justify-center m-2 bg-base-200">
+    <div class="tabs tabs-boxed justify-center m-2 bg-base-200 shrink-0">
       <a 
         v-for="(tab, index) in tabs" 
         :key="tab"
         class="tab" 
         :class="{ 'tab-active': activeTab === index }"
-        @click="activeTab = index"
+        @click="scrollToTab(index)"
       >
         {{ tab }}
       </a>
     </div>
 
     <!-- Content -->
-    <div class="flex-1 overflow-hidden relative">
-       <!-- Use separate divs with v-show to keep state alive, or component :is -->
-       <Transition name="fade" mode="out-in">
-         <component 
-           :is="activeTab === 0 ? FinanceOverview : activeTab === 1 ? FinanceExpenses : FinanceStatistics" 
-           @edit-member="handleEditMember"
-           @edit-transaction="handleEditTransaction"
-         />
-       </Transition>
+    <div 
+      class="flex-1 w-full flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth hide-scrollbar"
+      ref="scrollContainer"
+      @scroll="handleScroll"
+    >
+       <div class="w-full h-full shrink-0 snap-start snap-always overflow-y-auto relative">
+         <FinanceOverview @edit-member="handleEditMember" @edit-transaction="handleEditTransaction" />
+       </div>
+       <div class="w-full h-full shrink-0 snap-start snap-always overflow-y-auto relative">
+         <FinanceExpenses @edit-member="handleEditMember" @edit-transaction="handleEditTransaction" />
+       </div>
+       <div class="w-full h-full shrink-0 snap-start snap-always overflow-y-auto relative">
+         <FinanceStatistics @edit-member="handleEditMember" @edit-transaction="handleEditTransaction" />
+       </div>
     </div>
 
     <!-- FAB -->
@@ -681,14 +686,12 @@ const handleSavePayment = async () => {
 </template>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .slide-up-enter-active,
