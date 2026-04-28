@@ -40,6 +40,12 @@ const handleSignOut = async () => {
       </li>
 
       <li>
+        <a @click="navigate('finance')" class="py-4 text-lg font-medium">
+          💶 Finanzen
+        </a>
+      </li>
+
+      <li>
         <a @click="navigate('locations')" class="py-4 text-lg font-medium">
           📦 Vorräte
         </a>
@@ -60,12 +66,6 @@ const handleSignOut = async () => {
       <li>
         <a @click="navigate('recipes')" class="py-4 text-lg font-medium">
           📖 Rezepte
-        </a>
-      </li>
-
-      <li>
-        <a @click="navigate('finance')" class="py-4 text-lg font-medium">
-          💶 Finanzen
         </a>
       </li>
 
