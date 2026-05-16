@@ -1,18 +1,17 @@
 <script setup lang="ts">
+import WidgetShell from './WidgetShell.vue';
+
 defineProps<{
   title: string;
   icon?: string;
-  colorClass?: string;
 }>();
 </script>
 
 <template>
-  <div 
-    class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-base-200 h-full justify-center"
-  >
-    <div class="card-body p-4 items-center text-center"> 
-       <div class="text-3xl mb-2">{{ icon || '🔗' }}</div>
-       <h3 class="font-bold text-lg">{{ title }}</h3>
+  <WidgetShell tone="primary" clickable align="center">
+    <div class="flex-1 flex flex-col items-center justify-center w-full -mt-2">
+      <div class="text-4xl mb-2">{{ icon || '🔗' }}</div>
+      <div class="font-bold text-base text-center">{{ title }}</div>
     </div>
-  </div>
+  </WidgetShell>
 </template>

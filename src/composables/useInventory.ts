@@ -36,6 +36,31 @@ const categories = ref<Category[]>([]);
 const items = ref<Item[]>([]);
 const loading = ref(false);
 
+// Recent activity ring buffer (persisted to localStorage)
+export type ActivityKind = 'added' | 'opened' | 'consumed' | 'removed';
+export interface ActivityEntry {
+  kind: ActivityKind;
+  item_name: string;
+  at: string; // ISO timestamp
+}
+const ACTIVITY_KEY = 'inventory_activity_v1';
+const ACTIVITY_CAP = 20;
+
+const loadActivity = (): ActivityEntry[] => {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const recentActivity = ref<ActivityEntry[]>(loadActivity());
+
+const pushActivity = (kind: ActivityKind, item_name: string) => {
+  recentActivity.value.unshift({ kind, item_name, at: new Date().toISOString() });
+  if (recentActivity.value.length > ACTIVITY_CAP) recentActivity.value.length = ACTIVITY_CAP;
+  try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(recentActivity.value)); } catch {}
+};
+
 export function useInventory() {
 
   // 1. FETCH (Mit Join auf Instanzen)
@@ -94,6 +119,8 @@ export function useInventory() {
     // B) Erste Instanz erstellen
     await addInstance(newItem.id, quantity, expiryDate, openedAt);
 
+    pushActivity('added', name);
+
     // Lokal neuladen (einfachster Weg für Konsistenz)
     await fetchInventory();
   };
@@ -134,6 +161,7 @@ export function useInventory() {
         if (!b.expiry_date) return -1;
         return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
       });
+      pushActivity('added', item.name);
     }
   };
 
@@ -161,9 +189,19 @@ export function useInventory() {
     const instance = item?.instances.find(inst => inst.id === instanceId);
     if (!item || !instance) return;
 
+    const prevQty = instance.quantity;
+    const prevOpened = instance.opened_at ?? null;
+
     // Optimistisch Update
     if (updates.quantity !== undefined) instance.quantity = updates.quantity;
     if (updates.opened_at !== undefined) instance.opened_at = updates.opened_at;
+
+    if (updates.opened_at !== undefined && !prevOpened && updates.opened_at) {
+      pushActivity('opened', item.name);
+    }
+    if (updates.quantity !== undefined && updates.quantity < prevQty) {
+      pushActivity('consumed', item.name);
+    }
 
     const { error } = await supabase
       .from('item_instances')
@@ -219,6 +257,8 @@ export function useInventory() {
       item.instances = prevInstances; // Rollback
       return;
     }
+
+    pushActivity('removed', item.name);
 
     // Wenn das Item jetzt KEINE Instanzen mehr hat, löschen wir das Parent-Item auch
     if (item.instances.length === 0) {
@@ -349,6 +389,7 @@ export function useInventory() {
 
   return {
     locations, items, categories, loading,
+    recentActivity,
     fetchInventory, addLocation, addCategory, deleteCategory, addItem,
     addInstance, updateInstanceDetails, deleteInstance, // <-- Neue Actions
     getItemsByLocation, searchItems, getLocationName,

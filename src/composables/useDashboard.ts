@@ -1,6 +1,18 @@
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 
-export type WidgetType = 'expired' | 'soon' | 'opened' | 'inventory-chart' | 'location-chart' | 'todos' | 'product' | 'shortcut' | 'shopping-list';
+export type WidgetType =
+    | 'expired'
+    | 'soon'
+    | 'opened'
+    | 'inventory-chart'
+    | 'location-chart'
+    | 'todos'
+    | 'product'
+    | 'shortcut'
+    | 'shopping-list'
+    | 'recent-activity'
+    | 'finance-snapshot'
+    | 'quick-add';
 
 export interface DashboardWidget {
     id: string;
@@ -10,13 +22,26 @@ export interface DashboardWidget {
 }
 
 const DEFAULT_LAYOUT: DashboardWidget[] = [
+    { id: 'w-quickadd', type: 'quick-add', colSpan: 2 },
     { id: 'w1', type: 'expired', colSpan: 1 },
     { id: 'w2', type: 'soon', colSpan: 1 },
     { id: 'w3', type: 'opened', colSpan: 2 },
+    { id: 'w-activity', type: 'recent-activity', colSpan: 2 },
     { id: 'w4', type: 'inventory-chart', colSpan: 1 },
     { id: 'w5', type: 'todos', colSpan: 1 },
     { id: 'w6', type: 'location-chart', colSpan: 2 },
 ];
+
+// Widgets that must always take the full row.
+const FULL_WIDTH_TYPES = new Set<WidgetType>(['quick-add', 'recent-activity']);
+
+const defaultColSpan = (type: WidgetType): 1 | 2 => {
+    if (FULL_WIDTH_TYPES.has(type)) return 2;
+    if (type === 'opened' || type === 'location-chart') return 2;
+    return 1;
+};
+
+export const isWidthLocked = (type: WidgetType) => FULL_WIDTH_TYPES.has(type);
 
 const layout = ref<DashboardWidget[]>([]);
 
@@ -40,7 +65,6 @@ export function useDashboard() {
         localStorage.setItem('dashboard_layout_v1', JSON.stringify(layout.value));
     };
 
-    // Watch for changes and save (if layout is already initialized)
     watch(layout, () => {
         saveLayout();
     }, { deep: true });
@@ -50,12 +74,9 @@ export function useDashboard() {
     };
 
     const toggleProductPin = (productId: string) => {
-        console.log('Toggling pin for:', productId); // Debug
         if (isProductPinned(productId)) {
-            console.log('Removing pin');
             layout.value = layout.value.filter(w => !(w.type === 'product' && w.props?.productId === productId));
         } else {
-            console.log('Adding pin');
             layout.value.push({
                 id: 'w-item-' + Date.now(),
                 type: 'product',
@@ -70,7 +91,7 @@ export function useDashboard() {
             id: 'w-' + Date.now(),
             type,
             props,
-            colSpan: (type === 'opened' || type === 'location-chart') ? 2 : 1
+            colSpan: defaultColSpan(type),
         });
     };
 
@@ -78,12 +99,8 @@ export function useDashboard() {
         layout.value = layout.value.filter(w => w.id !== id);
     };
 
-    const moveWidget = (index: number, direction: -1 | 1) => {
-        const newIndex = index + direction;
-        if (newIndex < 0 || newIndex >= layout.value.length) return;
-        const temp = layout.value[index];
-        layout.value[index] = layout.value[newIndex];
-        layout.value[newIndex] = temp;
+    const resetLayout = () => {
+        layout.value = [...DEFAULT_LAYOUT];
     };
 
     // Initialize once if empty
@@ -97,6 +114,6 @@ export function useDashboard() {
         toggleProductPin,
         addWidget,
         removeWidget,
-        moveWidget
+        resetLayout,
     };
 }
