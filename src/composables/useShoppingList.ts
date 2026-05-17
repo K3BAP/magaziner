@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { supabase } from '../supabase';
+import { useActiveHousehold } from './useActiveHousehold';
 
 export interface ShoppingItem {
     id: string;
@@ -12,6 +13,8 @@ const items = ref<ShoppingItem[]>([]);
 const loading = ref(false);
 
 export function useShoppingList() {
+
+    const { activeHouseholdId } = useActiveHousehold();
 
     // 1. Fetch Items
     const fetchItems = async () => {
@@ -46,9 +49,15 @@ export function useShoppingList() {
         };
         items.value.unshift(newItem);
 
+        if (!activeHouseholdId.value) {
+            console.error('Kein aktiver Haushalt — Eintrag konnte nicht gespeichert werden.');
+            items.value = items.value.filter(i => i.id !== tempId);
+            return;
+        }
+
         const { data, error } = await supabase
             .from('shopping_list')
-            .insert({ title })
+            .insert({ title, household_id: activeHouseholdId.value })
             .select()
             .single();
 

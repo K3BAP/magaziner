@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { supabase } from '../supabase';
+import { useActiveHousehold } from './useActiveHousehold';
 
 export interface Ingredient {
     id: string;
@@ -21,6 +22,8 @@ const recipes = ref<Recipe[]>([]);
 const loading = ref(false);
 
 export function useRecipes() {
+
+    const { activeHouseholdId } = useActiveHousehold();
 
     // 1. Fetch Recipes
     const fetchRecipes = async () => {
@@ -57,12 +60,14 @@ export function useRecipes() {
 
     // 3. Add Recipe
     const addRecipe = async (name: string) => {
+        if (!activeHouseholdId.value) throw new Error('Kein aktiver Haushalt');
         const { data, error } = await supabase
             .from('recipes')
             .insert({
                 name,
                 ingredients: [],
-                description: ''
+                description: '',
+                household_id: activeHouseholdId.value,
             })
             .select()
             .single();

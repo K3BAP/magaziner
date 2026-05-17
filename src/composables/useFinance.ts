@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
+import { useActiveHousehold } from './useActiveHousehold';
 
 export interface FinanceMember {
     id: string;
@@ -44,6 +45,7 @@ const loading = ref(false);
 
 export function useFinance() {
     const { user } = useAuth();
+    const { activeHouseholdId } = useActiveHousehold();
 
     const fetchMembers = async () => {
         if (!user.value) return;
@@ -101,10 +103,10 @@ export function useFinance() {
     };
 
     const addMember = async (name: string) => {
-        if (!user.value) return null;
+        if (!activeHouseholdId.value) return null;
         const { data, error } = await supabase
             .from('finance_members')
-            .insert({ user_id: user.value.id, name })
+            .insert({ household_id: activeHouseholdId.value, name })
             .select()
             .single();
 
@@ -153,10 +155,10 @@ export function useFinance() {
     };
 
     const addCategory = async (name: string, icon?: string) => {
-        if (!user.value) return null;
+        if (!activeHouseholdId.value) return null;
         const { data, error } = await supabase
             .from('finance_categories')
-            .insert({ user_id: user.value.id, name, icon })
+            .insert({ household_id: activeHouseholdId.value, name, icon })
             .select()
             .single();
 
@@ -206,7 +208,7 @@ export function useFinance() {
     };
 
     const seedDefaultCategories = async () => {
-        if (!user.value) return;
+        if (!activeHouseholdId.value) return;
         const defaults = [
             { name: 'Lebensmittel', icon: '🍎' },
             { name: 'Restaurant', icon: '🍽️' },
@@ -220,7 +222,7 @@ export function useFinance() {
 
         const { error } = await supabase
             .from('finance_categories')
-            .insert(defaults.map(d => ({ ...d, user_id: user.value?.id })));
+            .insert(defaults.map(d => ({ ...d, household_id: activeHouseholdId.value! })));
 
         if (error) console.error('Error seeding categories:', error);
         else await fetchCategories();
@@ -237,13 +239,13 @@ export function useFinance() {
         splits?: { member_id: string; amount: number; percentage?: number }[],
         notes?: string
     ) => {
-        if (!user.value) return null;
+        if (!activeHouseholdId.value) return null;
 
         // 1. Insert Transaction
         const { data: trans, error: transError } = await supabase
             .from('finance_transactions')
             .insert({
-                user_id: user.value.id,
+                household_id: activeHouseholdId.value,
                 type,
                 amount,
                 payer_id,

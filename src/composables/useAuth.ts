@@ -2,26 +2,40 @@
 import { ref } from 'vue'
 import { supabase } from '../supabase'
 import type { User } from '@supabase/supabase-js'
+import { useProfile } from './useProfile'
 
 // Globaler State (außerhalb der Funktion, damit er überall gleich ist)
 const user = ref<User | null>(null)
-const isAuthReady = ref(false) // <--- NEU: Zeigt an, ob Supabase fertig geladen hat
+const isAuthReady = ref(false)
 
-// Initialisierung sofort starten (nicht erst bei onMounted)
-// Damit läuft der Check schon, während die App noch lädt
+const { fetchProfile, clearProfile } = useProfile()
+
+// Load profile after a user is set so that downstream consumers (active
+// household, data composables) have it ready when isAuthReady flips true.
+const resolveSession = async (sessionUser: User | null) => {
+  user.value = sessionUser;
+  if (sessionUser) {
+    await fetchProfile(sessionUser.id);
+  } else {
+    clearProfile();
+  }
+  isAuthReady.value = true;
+};
+
+// Initialisierung sofort starten
 supabase.auth.getSession().then(({ data }) => {
-  user.value = data.session?.user ?? null
-  isAuthReady.value = true // <--- JETZT wissen wir Bescheid
-})
+  resolveSession(data.session?.user ?? null);
+});
 
-supabase.auth.onAuthStateChange((_, session) => {
-  user.value = session?.user ?? null
-  // Falls ein Login/Logout passiert, sind wir definitiv "ready"
-  isAuthReady.value = true 
-})
+supabase.auth.onAuthStateChange((_event, session) => {
+  // Re-flip ready while we fetch the new profile so any in-flight router
+  // navigation knows to wait again.
+  isAuthReady.value = false;
+  resolveSession(session?.user ?? null);
+});
 
 export function useAuth() {
-  
+
   // 1. Registrieren
   const signUp = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({
@@ -47,6 +61,7 @@ export function useAuth() {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     user.value = null
+    clearProfile();
   }
 
   // 4. Passwort zurücksetzen
@@ -67,11 +82,11 @@ export function useAuth() {
     return data
   }
 
-  return { 
-    user, 
-    isAuthReady, // <--- Exportieren
-    signUp, 
-    signIn, 
+  return {
+    user,
+    isAuthReady,
+    signUp,
+    signIn,
     signOut,
     resetPassword,
     updatePassword

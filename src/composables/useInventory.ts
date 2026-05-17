@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
+import { useActiveHousehold } from './useActiveHousehold';
 
 export interface ItemInstance {
   id: string;
@@ -63,6 +64,14 @@ const pushActivity = (kind: ActivityKind, item_name: string) => {
 
 export function useInventory() {
 
+  const { activeHouseholdId } = useActiveHousehold();
+  const requireHousehold = (): string => {
+    if (!activeHouseholdId.value) {
+      throw new Error('Kein aktiver Haushalt');
+    }
+    return activeHouseholdId.value;
+  };
+
   // 1. FETCH (Mit Join auf Instanzen)
   const fetchInventory = async () => {
     try {
@@ -107,7 +116,7 @@ export function useInventory() {
     // A) Item Container erstellen
     const { data: newItem, error: itemError } = await supabase
       .from('items')
-      .insert({ name, location_id: locationId, category_id: categoryId, minimum_stock: minimumStock })
+      .insert({ name, location_id: locationId, category_id: categoryId, minimum_stock: minimumStock, household_id: requireHousehold() })
       .select()
       .single();
 
@@ -141,7 +150,8 @@ export function useInventory() {
         item_id: itemId,
         quantity,
         expiry_date: finalDate,
-        opened_at: finalOpened
+        opened_at: finalOpened,
+        household_id: requireHousehold(),
       })
       .select()
       .single();
@@ -175,7 +185,7 @@ export function useInventory() {
 
     if (!existing) {
       alert(`⚠️ Achtung! "${itemName}" ist knapp (${remainingStock} übrig). Wurde auf die Einkaufsliste gesetzt.`);
-      await supabase.from('shopping_list').insert({ title: itemName });
+      await supabase.from('shopping_list').insert({ title: itemName, household_id: requireHousehold() });
     }
   };
 
@@ -268,13 +278,13 @@ export function useInventory() {
   };
 
   // --- Helper ---
-  const addLocation = async (name: string, icon: string) => { /* ... wie vorher ... */
-    const { data } = await supabase.from('locations').insert({ name, icon }).select().single();
+  const addLocation = async (name: string, icon: string) => {
+    const { data } = await supabase.from('locations').insert({ name, icon, household_id: requireHousehold() }).select().single();
     if (data) locations.value.push(data);
   };
 
-  const addCategory = async (name: string, locationId: string) => { /* ... wie vorher ... */
-    const { data } = await supabase.from('categories').insert({ name, location_id: locationId }).select().single();
+  const addCategory = async (name: string, locationId: string) => {
+    const { data } = await supabase.from('categories').insert({ name, location_id: locationId, household_id: requireHousehold() }).select().single();
     if (data) { categories.value.push(data); return data; }
   };
 

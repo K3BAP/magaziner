@@ -14,6 +14,7 @@ import FinanceView from '../views/FinanceView.vue'
 import ForgotPasswordView from '../views/ForgotPasswordView.vue'
 import UpdatePasswordView from '../views/UpdatePasswordView.vue'
 import ScannerAddView from '../views/ScannerAddView.vue'
+import SettingsView from '../views/SettingsView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -94,6 +95,12 @@ const router = createRouter({
       path: '/finance',
       name: 'finance',
       component: FinanceView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView,
       meta: { requiresAuth: true }
     }
   ]

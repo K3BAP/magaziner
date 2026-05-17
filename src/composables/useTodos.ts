@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { supabase } from '../supabase';
+import { useActiveHousehold } from './useActiveHousehold';
 
 export interface Todo {
   id: string;
@@ -12,6 +13,8 @@ const todos = ref<Todo[]>([]);
 const loading = ref(false);
 
 export function useTodos() {
+
+  const { activeHouseholdId } = useActiveHousehold();
 
   // 1. Alle Todos laden
   const fetchTodos = async () => {
@@ -46,9 +49,15 @@ export function useTodos() {
     };
     todos.value.unshift(newTodo);
 
+    if (!activeHouseholdId.value) {
+      console.error('Kein aktiver Haushalt — Todo konnte nicht gespeichert werden.');
+      todos.value = todos.value.filter(t => t.id !== tempId);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('todos')
-      .insert({ title })
+      .insert({ title, household_id: activeHouseholdId.value })
       .select()
       .single();
 
