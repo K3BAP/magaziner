@@ -57,13 +57,17 @@ export function useProfile() {
     if (!profile.value) throw new Error('Kein Profil geladen');
 
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    // Cache-bust via timestamp prefix so the public URL refreshes immediately.
+    // Cache-bust via timestamp suffix so the public URL refreshes immediately.
     const path = `${profile.value.id}/avatar-${Date.now()}.${ext}`;
 
     const { error: uploadErr } = await supabase
       .storage
       .from('avatars')
-      .upload(path, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: file.type || 'image/jpeg',
+      });
 
     if (uploadErr) throw uploadErr;
 

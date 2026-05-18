@@ -2,12 +2,19 @@
 import { ref, computed } from 'vue';
 import { useProfile } from '../../composables/useProfile';
 import { CameraIcon, UserIcon } from '@heroicons/vue/24/outline';
+import AvatarCropModal from './AvatarCropModal.vue';
 
 const { profile, uploadAvatar } = useProfile();
 
-const uploading = ref(false);
+type Phase = 'idle' | 'uploading';
+const phase = ref<Phase>('idle');
 const error = ref<string | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
+
+// The file currently being cropped. Setting this opens the modal.
+const pendingFile = ref<File | null>(null);
+
+const busy = computed(() => phase.value !== 'idle');
 
 const initial = computed(() => {
   const name = profile.value?.display_name?.trim() ?? '';
@@ -15,36 +22,40 @@ const initial = computed(() => {
 });
 
 const triggerPicker = () => {
-  if (!uploading.value) fileInput.value?.click();
+  if (!busy.value) fileInput.value?.click();
 };
 
-const onFileChange = async (e: Event) => {
+const onFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   const file = target.files?.[0];
+  // Reset the input so re-picking the same file still re-triggers `change`.
+  target.value = '';
   if (!file) return;
 
   error.value = null;
 
-  // 5 MB to match the bucket limit configured in the migration.
-  if (file.size > 5 * 1024 * 1024) {
-    error.value = 'Bild zu groß (max. 5 MB).';
-    target.value = '';
-    return;
-  }
   if (!file.type.startsWith('image/')) {
     error.value = 'Bitte ein Bild auswählen.';
-    target.value = '';
     return;
   }
 
-  uploading.value = true;
+  // Defer to the crop modal — user chooses the visible area, then we encode.
+  pendingFile.value = file;
+};
+
+const onCropCancel = () => {
+  pendingFile.value = null;
+};
+
+const onCropDone = async (cropped: File) => {
+  pendingFile.value = null;
+  phase.value = 'uploading';
   try {
-    await uploadAvatar(file);
+    await uploadAvatar(cropped);
   } catch (e: any) {
     error.value = e?.message ?? 'Upload fehlgeschlagen.';
   } finally {
-    uploading.value = false;
-    target.value = '';
+    phase.value = 'idle';
   }
 };
 </script>
@@ -54,10 +65,10 @@ const onFileChange = async (e: Event) => {
     <button
       type="button"
       class="relative group rounded-full overflow-hidden ring-2 ring-base-300 hover:ring-primary transition-all"
-      :class="uploading ? 'opacity-60' : ''"
+      :class="busy ? 'opacity-60' : ''"
       style="width: 96px; height: 96px"
       @click="triggerPicker"
-      :disabled="uploading"
+      :disabled="busy"
       aria-label="Profilbild ändern"
     >
       <img
@@ -74,8 +85,11 @@ const onFileChange = async (e: Event) => {
         <UserIcon v-else class="h-12 w-12" />
       </div>
 
-      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-        <span v-if="uploading" class="loading loading-spinner loading-md text-white" />
+      <div
+        class="absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center"
+        :class="busy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+      >
+        <span v-if="busy" class="loading loading-spinner loading-md text-white" />
         <CameraIcon v-else class="h-7 w-7 text-white" />
       </div>
     </button>
@@ -84,12 +98,13 @@ const onFileChange = async (e: Event) => {
       type="button"
       class="text-xs link link-primary"
       @click="triggerPicker"
-      :disabled="uploading"
+      :disabled="busy"
     >
       {{ profile?.avatar_url ? 'Bild ändern' : 'Bild hochladen' }}
     </button>
 
-    <p v-if="error" class="text-xs text-error">{{ error }}</p>
+    <p v-if="busy" class="text-xs text-base-content/60">Wird hochgeladen…</p>
+    <p v-else-if="error" class="text-xs text-error">{{ error }}</p>
 
     <input
       ref="fileInput"
@@ -97,6 +112,12 @@ const onFileChange = async (e: Event) => {
       accept="image/*"
       class="hidden"
       @change="onFileChange"
+    />
+
+    <AvatarCropModal
+      :file="pendingFile"
+      @cancel="onCropCancel"
+      @cropped="onCropDone"
     />
   </div>
 </template>
