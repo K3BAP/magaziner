@@ -11,6 +11,8 @@ import { useActiveHousehold } from './composables/useActiveHousehold';
 import { useRoute } from 'vue-router';
 import TheNavbar from './components/layout/TheNavbar.vue';
 import TheDrawer from './components/layout/TheDrawer.vue';
+import ChangelogModal from './components/ChangelogModal.vue';
+import { useChangelog } from './composables/useChangelog';
 
 const { user, isAuthReady } = useAuth();
 const { fetchInventory } = useInventory();
@@ -20,6 +22,7 @@ const { fetchRecipes } = useRecipes();
 const { fetchMembers, fetchCategories: fetchFinanceCategories, fetchTransactions } = useFinance();
 const { fetchMyHouseholds, clearHouseholds } = useHouseholds();
 const { activeHouseholdId } = useActiveHousehold();
+const { bootstrap: bootstrapChangelog } = useChangelog();
 const route = useRoute();
 
 const refetchAllData = () => {
@@ -42,6 +45,10 @@ watch(
     if (u) {
       await fetchMyHouseholds();
       refetchAllData();
+      // On a brand-new install bootstrap silently records the current version;
+      // on an existing install where the stored version is older than what
+      // we ship now, the modal renders itself via `hasUnseen`.
+      bootstrapChangelog();
     } else {
       clearHouseholds();
     }
@@ -81,5 +88,8 @@ watch(activeHouseholdId, (hid, prev) => {
 
     <TheDrawer />
 
+    <!-- "What's new" pop-up. Renders itself only when the user is on a
+         version newer than the one they last acknowledged. -->
+    <ChangelogModal />
   </div>
 </template>
