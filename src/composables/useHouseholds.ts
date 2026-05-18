@@ -20,12 +20,20 @@ export function useHouseholds() {
   const { profile, updateProfile } = useProfile();
 
   const fetchMyHouseholds = async () => {
+    if (!profile.value) {
+      households.value = [];
+      return;
+    }
     loading.value = true;
     try {
-      // Fetch via the join so we get the role too. RLS guarantees we only see our own memberships.
+      // Filter to our own membership rows explicitly. RLS lets us read every
+      // household_members row in households we belong to (needed for the
+      // member-list UI), so without this filter co-members' rows would show
+      // up here as duplicate entries with the wrong role.
       const { data, error } = await supabase
         .from('household_members')
         .select('role, households(*)')
+        .eq('user_id', profile.value.id)
         .order('joined_at', { ascending: true });
 
       if (error) {

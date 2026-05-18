@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter, RouterLink } from 'vue-router';
+import { useRouter, useRoute, RouterLink } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
 
 const { signIn, signUp } = useAuth();
 const router = useRouter();
+const route = useRoute();
 
 const email = ref('');
 const password = ref('');
@@ -12,20 +13,25 @@ const isLoginMode = ref(true);
 const authLoading = ref(false);
 const errorMsg = ref('');
 
+// After a successful auth, return to wherever the user was headed (e.g. an
+// invite link they followed before logging in). Falls back to dashboard.
+const redirectTarget = (): string => {
+  const r = route.query.redirect;
+  if (typeof r === 'string' && r.startsWith('/')) return r;
+  return '/';
+};
+
 const handleAuth = async () => {
   authLoading.value = true;
   errorMsg.value = '';
   try {
     if (isLoginMode.value) {
       await signIn(email.value, password.value);
-      // Router redirect is usually handled by the guard or watchEffect in App.vue, 
-      // but explicit push here is good UX.
-      router.push({ name: 'dashboard' }); 
     } else {
       await signUp(email.value, password.value);
       alert('Registrierung erfolgreich! Du bist jetzt eingeloggt.');
-      router.push({ name: 'dashboard' });
     }
+    router.push(redirectTarget());
   } catch (e: any) {
     errorMsg.value = e.message;
   } finally {

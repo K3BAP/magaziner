@@ -15,6 +15,7 @@ import ForgotPasswordView from '../views/ForgotPasswordView.vue'
 import UpdatePasswordView from '../views/UpdatePasswordView.vue'
 import ScannerAddView from '../views/ScannerAddView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import InviteAcceptView from '../views/InviteAcceptView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -102,6 +103,15 @@ const router = createRouter({
       name: 'settings',
       component: SettingsView,
       meta: { requiresAuth: true }
+    },
+    {
+      // Public route — the view itself bounces unauthenticated visitors to
+      // /login?redirect=... so the same link works for invited friends who
+      // don't have an account yet.
+      path: '/join/:token',
+      name: 'invite-accept',
+      component: InviteAcceptView,
+      props: true,
     }
   ]
 })
@@ -124,7 +134,9 @@ router.beforeEach(async (to, from, next) => {
 
   // 2. PRÜFEN: Jetzt wissen wir sicher, ob user da ist oder nicht
   if (to.meta.requiresAuth && !user.value) {
-    next({ name: 'login' })
+    // Preserve the originally requested URL so e.g. an invite link survives
+    // the login round-trip. LoginView reads `query.redirect` after auth.
+    next({ name: 'login', query: { redirect: to.fullPath } })
   } else if (to.name === 'login' && user.value) {
     next({ name: 'dashboard' })
   } else {
