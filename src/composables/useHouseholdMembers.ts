@@ -72,10 +72,33 @@ export function useHouseholdMembers() {
     }
   };
 
+  /**
+   * Owner-only: hand the owner role to another existing member. Three rows
+   * change (households.owner_id + two membership roles), so it goes through
+   * a SECURITY DEFINER RPC for atomicity.
+   *
+   * Caller is responsible for refreshing the household list afterwards so
+   * the "Inhaber:in / Mitglied" badge on the household row reflects the new
+   * role.
+   */
+  const transferOwnership = async (householdId: string, newOwnerId: string): Promise<void> => {
+    const { error } = await supabase.rpc('transfer_household_ownership', {
+      hid: householdId,
+      new_owner: newOwnerId,
+    });
+    if (error) {
+      console.error('Fehler beim Übertragen der Inhaberschaft:', error);
+      throw error;
+    }
+    // Refresh the local member cache so role badges update immediately.
+    await fetchMembers(householdId);
+  };
+
   return {
     membersByHousehold,
     loadingByHousehold,
     fetchMembers,
     removeMember,
+    transferOwnership,
   };
 }

@@ -19,6 +19,7 @@ import {
   ArrowPathIcon,
   LinkIcon,
   UserMinusIcon,
+  KeyIcon,
 } from '@heroicons/vue/24/outline';
 
 const {
@@ -27,9 +28,10 @@ const {
   switchHousehold,
   renameHousehold,
   deleteHousehold,
+  fetchMyHouseholds,
 } = useHouseholds();
 const { activeHouseholdId } = useActiveHousehold();
-const { membersByHousehold, fetchMembers, removeMember } = useHouseholdMembers();
+const { membersByHousehold, fetchMembers, removeMember, transferOwnership } = useHouseholdMembers();
 const {
   invitesByHousehold,
   fetchActiveInvite,
@@ -63,6 +65,10 @@ const copiedToken = ref<string | null>(null);
 // Per-row kick confirmation: { hhId, userId }
 const confirmingKick = ref<{ hhId: string; userId: string } | null>(null);
 const kicking = ref(false);
+
+// Per-row ownership-transfer confirmation: { hhId, userId }
+const confirmingTransfer = ref<{ hhId: string; userId: string } | null>(null);
+const transferring = ref(false);
 
 const onSwitch = async (id: string) => {
   if (id === activeHouseholdId.value) return;
@@ -210,6 +216,7 @@ const copyInviteUrl = async (token: string) => {
 // --- Kick / leave a member ---
 
 const requestKick = (hhId: string, userId: string) => {
+  confirmingTransfer.value = null;
   confirmingKick.value = { hhId, userId };
 };
 const cancelKick = () => { confirmingKick.value = null; };
@@ -226,6 +233,32 @@ const confirmKick = async () => {
     errorMsg.value = e?.message ?? 'Mitglied konnte nicht entfernt werden.';
   } finally {
     kicking.value = false;
+  }
+};
+
+// --- Transfer ownership ---
+
+const requestTransfer = (hhId: string, userId: string) => {
+  confirmingKick.value = null;
+  confirmingTransfer.value = { hhId, userId };
+};
+const cancelTransfer = () => { confirmingTransfer.value = null; };
+
+const confirmTransfer = async () => {
+  if (!confirmingTransfer.value) return;
+  const { hhId, userId } = confirmingTransfer.value;
+  transferring.value = true;
+  errorMsg.value = null;
+  try {
+    await transferOwnership(hhId, userId);
+    // Refresh the household list so our own row's role badge flips from
+    // "Inhaber:in" to "Mitglied".
+    await fetchMyHouseholds();
+    confirmingTransfer.value = null;
+  } catch (e: any) {
+    errorMsg.value = e?.message ?? 'Inhaberschaft konnte nicht übertragen werden.';
+  } finally {
+    transferring.value = false;
   }
 };
 
@@ -406,17 +439,27 @@ watch(households, (list) => {
                     {{ m.role === 'owner' ? 'Inhaber:in' : 'Mitglied' }}
                   </div>
                 </div>
-                <!-- Kick button: only for owner viewing non-owner non-self rows -->
-                <button
-                  v-if="h.role === 'owner' && m.role !== 'owner' && m.user_id !== user?.id"
-                  type="button"
-                  class="btn btn-xs btn-ghost btn-circle text-error hover:bg-error hover:text-error-content"
-                  title="Aus Haushalt entfernen"
-                  aria-label="Aus Haushalt entfernen"
-                  @click="requestKick(h.id, m.user_id)"
-                >
-                  <UserMinusIcon class="h-4 w-4" />
-                </button>
+                <!-- Owner-only actions on non-owner non-self rows -->
+                <template v-if="h.role === 'owner' && m.role !== 'owner' && m.user_id !== user?.id">
+                  <button
+                    type="button"
+                    class="btn btn-xs btn-ghost btn-circle hover:bg-primary hover:text-primary-content"
+                    title="Inhaberschaft übertragen"
+                    aria-label="Inhaberschaft übertragen"
+                    @click="requestTransfer(h.id, m.user_id)"
+                  >
+                    <KeyIcon class="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-xs btn-ghost btn-circle text-error hover:bg-error hover:text-error-content"
+                    title="Aus Haushalt entfernen"
+                    aria-label="Aus Haushalt entfernen"
+                    @click="requestKick(h.id, m.user_id)"
+                  >
+                    <UserMinusIcon class="h-4 w-4" />
+                  </button>
+                </template>
               </li>
             </ul>
             <div v-else class="text-xs text-base-content/50 italic">
@@ -440,6 +483,31 @@ watch(households, (list) => {
                   <span v-if="kicking" class="loading loading-spinner loading-xs" />
                   <UserMinusIcon v-else class="h-3.5 w-3.5" />
                   Entfernen
+                </button>
+              </div>
+            </div>
+
+            <!-- Transfer-ownership confirmation inline -->
+            <div
+              v-if="confirmingTransfer && confirmingTransfer.hhId === h.id"
+              class="mt-2 p-3 rounded-lg border border-primary/40 bg-primary/5 flex flex-col gap-2"
+            >
+              <div class="text-sm">
+                Inhaberschaft an
+                <strong>{{ membersByHousehold[h.id]?.find(mm => mm.user_id === confirmingTransfer.userId)?.display_name }}</strong>
+                übertragen?
+                <div class="text-xs text-base-content/70 mt-1">
+                  Du wirst danach selbst nur noch Mitglied und kannst den Haushalt nicht mehr löschen oder umbenennen.
+                </div>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button type="button" class="btn btn-ghost btn-xs" :disabled="transferring" @click="cancelTransfer">
+                  Abbrechen
+                </button>
+                <button type="button" class="btn btn-primary btn-xs gap-1" :disabled="transferring" @click="confirmTransfer">
+                  <span v-if="transferring" class="loading loading-spinner loading-xs" />
+                  <KeyIcon v-else class="h-3.5 w-3.5" />
+                  Übertragen
                 </button>
               </div>
             </div>
