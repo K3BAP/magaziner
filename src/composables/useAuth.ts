@@ -82,6 +82,39 @@ export function useAuth() {
     return data
   }
 
+  // 6. Mit Google anmelden
+  //    Stashes the post-login redirect in localStorage because the OAuth round
+  //    trip (us → Google → Supabase → /auth/callback) strips our query params.
+  const signInWithGoogle = async (redirectAfter?: string) => {
+    if (redirectAfter && redirectAfter.startsWith('/')) {
+      try {
+        localStorage.setItem('magaziner:postLoginRedirect', redirectAfter);
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/auth/callback' },
+    });
+    if (error) throw error;
+  };
+
+  // 7. Konto löschen (RPC; FK-Cascades räumen alles drumherum auf)
+  const deleteAccount = async () => {
+    const { error } = await supabase.rpc('delete_my_account');
+    if (error) throw error;
+    // The JWT still exists locally but is orphaned now. Clear local state;
+    // don't surface network errors from signOut — the server may already 401.
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      /* ignore */
+    }
+    user.value = null;
+    clearProfile();
+  };
+
   return {
     user,
     isAuthReady,
@@ -89,6 +122,8 @@ export function useAuth() {
     signIn,
     signOut,
     resetPassword,
-    updatePassword
+    updatePassword,
+    signInWithGoogle,
+    deleteAccount,
   }
 }

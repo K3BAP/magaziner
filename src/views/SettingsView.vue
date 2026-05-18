@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
 import { useProfile } from '../composables/useProfile';
@@ -15,10 +15,12 @@ import {
   SunIcon,
   MoonIcon,
   CheckIcon,
+  ExclamationTriangleIcon,
+  TrashIcon,
 } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
-const { user, signOut, updatePassword } = useAuth();
+const { user, signOut, updatePassword, deleteAccount } = useAuth();
 const { profile, updateProfile } = useProfile();
 const { theme, toggle: toggleTheme } = useTheme();
 
@@ -87,6 +89,48 @@ const onChangePassword = async () => {
 const onSignOut = async () => {
   await signOut();
   router.push({ name: 'login' });
+};
+
+// --- Konto löschen (mehrstufige Bestätigung) ---
+//   'idle'    → nur der rote "Konto löschen" Knopf
+//   'warn'    → Folgen-Aufzählung + "Abbrechen" / "Ja, weiter"
+//   'confirm' → E-Mail eintippen, "Endgültig löschen"
+const deleteStep = ref<'idle' | 'warn' | 'confirm'>('idle');
+const deleteEmailInput = ref('');
+const deleting = ref(false);
+const deleteError = ref<string | null>(null);
+
+const canConfirmDelete = computed(() => {
+  const typed = deleteEmailInput.value.trim().toLowerCase();
+  const actual = (user.value?.email ?? '').trim().toLowerCase();
+  return typed.length > 0 && typed === actual;
+});
+
+const cancelDelete = () => {
+  if (deleting.value) return;
+  deleteStep.value = 'idle';
+  deleteEmailInput.value = '';
+  deleteError.value = null;
+};
+
+const goToConfirm = () => {
+  deleteError.value = null;
+  deleteEmailInput.value = '';
+  deleteStep.value = 'confirm';
+};
+
+const onDeleteAccount = async () => {
+  if (!canConfirmDelete.value || deleting.value) return;
+  deleting.value = true;
+  deleteError.value = null;
+  try {
+    await deleteAccount();
+    router.replace({ name: 'login', query: { deleted: '1' } });
+  } catch (e: any) {
+    deleteError.value = e?.message ?? 'Konto konnte nicht gelöscht werden.';
+  } finally {
+    deleting.value = false;
+  }
 };
 </script>
 
@@ -231,6 +275,114 @@ const onSignOut = async () => {
           </div>
 
           <div v-if="pwdSaved" class="text-xs text-success">Passwort aktualisiert.</div>
+
+          <!-- Gefahrenzone: Konto löschen -->
+          <div class="mt-4 pt-4 border-t border-base-300 flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+              <ExclamationTriangleIcon class="h-4 w-4 text-error" />
+              <span class="text-xs uppercase tracking-wider font-semibold text-error">Gefahrenzone</span>
+            </div>
+
+            <button
+              v-if="deleteStep === 'idle'"
+              type="button"
+              class="btn btn-outline btn-error btn-sm self-start gap-1"
+              @click="deleteStep = 'warn'"
+            >
+              <TrashIcon class="h-4 w-4" />
+              Konto löschen
+            </button>
+
+            <div
+              v-else
+              class="flex flex-col gap-3 p-3 rounded-xl border border-error/40 bg-error/5"
+            >
+              <div class="flex items-start gap-2">
+                <ExclamationTriangleIcon class="h-5 w-5 text-error shrink-0 mt-0.5" />
+                <div class="text-sm font-semibold">Konto wirklich löschen?</div>
+              </div>
+
+              <template v-if="deleteStep === 'warn'">
+                <ul class="text-xs text-base-content/80 flex flex-col gap-1 pl-1">
+                  <li class="flex items-start gap-2">
+                    <span class="text-error mt-1">•</span>
+                    <span>Dein Profil und deine Anmeldedaten werden gelöscht.</span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <span class="text-error mt-1">•</span>
+                    <span>
+                      Haushalte, die <strong>dir gehören</strong>, werden mit allen Daten
+                      (Vorräte, Einkaufsliste, Rezepte, Finanzen, …) entfernt — auch für Mitbewohner:innen.
+                    </span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <span class="text-error mt-1">•</span>
+                    <span>
+                      Du wirst aus Haushalten, in denen du nur Mitglied bist, entfernt.
+                      Diese Haushalte bleiben bestehen.
+                    </span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <span class="text-error mt-1">•</span>
+                    <span><strong>Diese Aktion kann nicht rückgängig gemacht werden.</strong></span>
+                  </li>
+                </ul>
+                <div class="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    @click="cancelDelete"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-error btn-sm"
+                    @click="goToConfirm"
+                  >
+                    Ja, weiter
+                  </button>
+                </div>
+              </template>
+
+              <template v-else-if="deleteStep === 'confirm'">
+                <p class="text-xs text-base-content/80">
+                  Tippe zur Bestätigung deine E-Mail-Adresse
+                  <span class="font-mono">{{ user?.email ?? '' }}</span> ein.
+                </p>
+                <input
+                  v-model="deleteEmailInput"
+                  type="email"
+                  autocomplete="off"
+                  class="input input-bordered input-sm w-full"
+                  :disabled="deleting"
+                  :placeholder="user?.email ?? 'E-Mail'"
+                  @keyup.enter="onDeleteAccount"
+                />
+                <p v-if="deleteError" class="text-xs text-error">{{ deleteError }}</p>
+                <div class="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    :disabled="deleting"
+                    @click="cancelDelete"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-error btn-sm gap-1"
+                    :disabled="!canConfirmDelete || deleting"
+                    @click="onDeleteAccount"
+                  >
+                    <span v-if="deleting" class="loading loading-spinner loading-xs" />
+                    <TrashIcon v-else class="h-4 w-4" />
+                    Endgültig löschen
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
     </section>

@@ -25,6 +25,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.4.0',
+    date: '2026-05-18',
+    title: 'Google-Login & Konto löschen',
+    items: [
+      'Du kannst dich jetzt mit deinem Google-Konto anmelden.',
+      'In den Einstellungen kannst du dein Konto löschen — Haushalte, die dir gehören, werden mit allen Daten entfernt.',
+    ],
+  },
+  {
     version: '0.3.0',
     date: '2026-05-18',
     title: 'Haushalte teilen',

@@ -16,6 +16,7 @@ import UpdatePasswordView from '../views/UpdatePasswordView.vue'
 import ScannerAddView from '../views/ScannerAddView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import InviteAcceptView from '../views/InviteAcceptView.vue'
+import AuthCallbackView from '../views/AuthCallbackView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -26,6 +27,14 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView
+    },
+    {
+      // OAuth landing page — Supabase auto-exchanges the ?code= param into a
+      // session on load (detectSessionInUrl default), this view just waits
+      // for the session and forwards to the stashed redirect target.
+      path: '/auth/callback',
+      name: 'authCallback',
+      component: AuthCallbackView,
     },
     {
       path: '/forgot-password',
