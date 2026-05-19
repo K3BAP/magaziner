@@ -4,6 +4,8 @@ import { useFinance, type FinanceMember, type FinanceCategory } from '../composa
 import FinanceOverview from '../components/finance/FinanceOverview.vue';
 import FinanceExpenses from '../components/finance/FinanceExpenses.vue';
 import FinanceStatistics from '../components/finance/FinanceStatistics.vue';
+import ExpenseWizard from '../components/finance/ExpenseWizard.vue';
+import PaymentWizard from '../components/finance/PaymentWizard.vue';
 
 // Tabs
 const activeTab = ref(0);
@@ -75,8 +77,14 @@ const toggleFab = () => {
 // --- Modals ---
 const showMemberModal = ref(false);
 const showCategoryModal = ref(false); // New Modal
-const showExpenseModal = ref(false);
-const showPaymentModal = ref(false);
+const showExpenseModal = ref(false); // edit-only after the wizard refactor
+const showPaymentModal = ref(false); // edit-only after the wizard refactor
+
+// --- Wizards (create flow) ---
+// Edit goes through the existing modals via `handleEditTransaction`; create
+// hops through a step-by-step wizard instead so quick mobile entry feels fast.
+const showExpenseWizard = ref(false);
+const showPaymentWizard = ref(false);
 
 const newMemberName = ref('');
 const newCategoryName = ref(''); // Category Input
@@ -454,6 +462,21 @@ const handleSavePayment = async () => {
        </div>
     </div>
 
+    <!-- Wizards (create flow) — edits keep using the modals below. -->
+    <ExpenseWizard
+      :open="showExpenseWizard"
+      @close="showExpenseWizard = false"
+      @saved="showExpenseWizard = false"
+      @edit-categories="showCategoryModal = true"
+      @add-member="showExpenseWizard = false; showMemberModal = true"
+    />
+    <PaymentWizard
+      :open="showPaymentWizard"
+      @close="showPaymentWizard = false"
+      @saved="showPaymentWizard = false"
+      @add-member="showPaymentWizard = false; showMemberModal = true"
+    />
+
     <!-- FAB -->
     <div class="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-30">
        
@@ -463,10 +486,10 @@ const handleSavePayment = async () => {
             <button @click="showMemberModal = true; isFabOpen = false" class="btn btn-md btn-info shadow-lg gap-2">
               👤 Person
             </button>
-            <button @click="showPaymentModal = true; isFabOpen = false" class="btn btn-md btn-success shadow-lg gap-2">
+            <button @click="showPaymentWizard = true; isFabOpen = false" class="btn btn-md btn-success shadow-lg gap-2">
               💸 Zahlung
             </button>
-            <button @click="showExpenseModal = true; isFabOpen = false" class="btn btn-md btn-primary shadow-lg gap-2">
+            <button @click="showExpenseWizard = true; isFabOpen = false" class="btn btn-md btn-primary shadow-lg gap-2">
               🛒 Ausgabe
             </button>
          </div>
