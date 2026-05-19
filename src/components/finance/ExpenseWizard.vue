@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { useFinance } from '../../composables/useFinance';
+import { useExpenseSplits } from '../../composables/useExpenseSplits';
 import {
   ArrowLeftIcon,
   XMarkIcon,
@@ -34,94 +35,15 @@ const categoryId = ref<string>(''); // '' === keine
 const payerId = ref<string>('');
 const date = ref(new Date().toISOString().split('T')[0]);
 
-// Splits — same shape and helpers as FinanceView.vue.
-// TODO: consolidate with FinanceView once the edit modal is also migrated.
-interface UI_Split {
-  memberId: string;
-  name: string;
-  amount: string;
-  percentage: number;
-  active: boolean;
-}
-const splits = ref<UI_Split[]>([]);
-
-const initSplits = () => {
-  const count = members.value.length;
-  if (count === 0) {
-    splits.value = [];
-    return;
-  }
-  const equalPercent = 100 / count;
-  const total = Number.isFinite(amount.value) ? amount.value : 0;
-  const equalAmount = total / count;
-  splits.value = members.value.map((m) => ({
-    memberId: m.id,
-    name: m.name,
-    active: true,
-    percentage: Number(equalPercent.toFixed(2)),
-    amount: equalAmount.toFixed(2),
-  }));
-};
-
-const distributeRest = (sourceId: string | null, newTotalPercent: number) => {
-  const total = Number.isFinite(amount.value) ? amount.value : 0;
-  const active = splits.value.filter((s) => s.active);
-  const others = active.filter((s) => s.memberId !== sourceId);
-  if (others.length === 0) return;
-  const currentOthersTotalPercent = others.reduce((acc, s) => acc + s.percentage, 0);
-  const remainingPercent = 100 - newTotalPercent;
-  const ratio = currentOthersTotalPercent > 0 ? remainingPercent / currentOthersTotalPercent : 0;
-  const useEqual = currentOthersTotalPercent === 0;
-  others.forEach((s) => {
-    if (useEqual) {
-      s.percentage = remainingPercent / others.length;
-    } else {
-      s.percentage = s.percentage * ratio;
-    }
-    const amt = (s.percentage / 100) * total;
-    s.percentage = Number(s.percentage.toFixed(2));
-    s.amount = amt.toFixed(2);
-  });
-};
-
-const handleSplitChange = (split: UI_Split, type: 'amount' | 'percentage') => {
-  const total = Number.isFinite(amount.value) ? amount.value : 0;
-  if (type === 'amount') {
-    const numAmount = Number(split.amount);
-    split.percentage = total > 0 ? (numAmount / total) * 100 : 0;
-    split.percentage = Number(split.percentage.toFixed(2));
-  } else {
-    const amt = (split.percentage / 100) * total;
-    split.amount = amt.toFixed(2);
-  }
-  distributeRest(split.memberId, split.percentage);
-};
-
-const handleActiveChange = () => {
-  const active = splits.value.filter((s) => s.active);
-  if (active.length === 0) return;
-  const equalPercent = 100 / active.length;
-  const total = Number.isFinite(amount.value) ? amount.value : 0;
-  splits.value.forEach((s) => {
-    if (s.active) {
-      s.percentage = Number(equalPercent.toFixed(2));
-      const amt = (equalPercent / 100) * total;
-      s.amount = amt.toFixed(2);
-    } else {
-      s.percentage = 0;
-      s.amount = '0.00';
-    }
-  });
-};
-
-// When the amount changes, keep the per-split € figures consistent with the %.
-watch(amount, (newVal) => {
-  const total = Number.isFinite(newVal) ? newVal : 0;
-  splits.value.forEach((s) => {
-    const amt = (s.percentage / 100) * total;
-    s.amount = amt.toFixed(2);
-  });
-});
+// Split math (init, redistribute, normalise) lives in a shared composable so
+// the edit modal in FinanceView and this wizard stay in lockstep.
+const {
+  splits,
+  initEqual: initSplits,
+  onFieldEdit: handleSplitChange,
+  onActiveToggle: handleActiveChange,
+  finaliseForSave: finaliseSplits,
+} = useExpenseSplits(members, amount);
 
 // -- Lifecycle --
 const reset = () => {
@@ -232,20 +154,7 @@ const save = async () => {
   saving.value = true;
   errorMsg.value = null;
   try {
-    const activeSplits = splits.value.filter((s) => s.active);
-    // Normalise the last cent of rounding error onto the first active split.
-    const currentTotal = activeSplits.reduce((acc, s) => acc + Number(s.amount), 0);
-    const diff = amount.value - currentTotal;
-    if (Math.abs(diff) > 0.001 && activeSplits.length > 0) {
-      const newValue = Number(activeSplits[0].amount) + diff;
-      activeSplits[0].amount = newValue.toFixed(2);
-    }
-    const finalSplits = activeSplits.map((s) => ({
-      member_id: s.memberId,
-      amount: Number(s.amount),
-      percentage: s.percentage,
-    }));
-
+    const finalSplits = finaliseSplits();
     const result = await addTransaction(
       'expense',
       amount.value,
