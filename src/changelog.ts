@@ -25,6 +25,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.0',
+    date: '2026-05-19',
+    title: 'Schnellere Ausgaben',
+    items: [
+      'Neue Ausgaben und Zahlungen erfasst du jetzt in einem Schritt-für-Schritt-Dialog mit großen Tippzielen — perfekt für unterwegs.',
+      'Neues Dashboard-Widget „Neue Ausgabe": Ein Tippen, und der Dialog ist offen.',
+      'Das Dashboard zeigt jetzt auch am Desktop zwei Spalten, damit Widgets in der vorgesehenen Größe erscheinen.',
+    ],
+  },
+  {
     version: '0.4.0',
     date: '2026-05-18',
     title: 'Google-Login & Konto löschen',
