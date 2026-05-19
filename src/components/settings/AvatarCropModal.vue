@@ -69,6 +69,11 @@ const imageStyle = computed(() => ({
   top: '50%',
   width: `${renderedWidth.value}px`,
   height: `${renderedHeight.value}px`,
+  // Tailwind's preflight sets `img { max-width: 100% }`, which silently
+  // clamps the image's rendered width to the crop viewport's 280px — wide
+  // images get squeezed and zoom only affects the height. Explicitly opt out.
+  maxWidth: 'none' as const,
+  maxHeight: 'none' as const,
   transform: `translate(calc(-50% + ${offsetX.value}px), calc(-50% + ${offsetY.value}px))`,
   pointerEvents: 'none' as const,
   userSelect: 'none' as const,
