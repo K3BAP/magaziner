@@ -23,6 +23,9 @@ const { members, categories, addTransaction } = useFinance();
 // -- Step state --
 type Step = 1 | 2 | 3 | 4 | 5;
 const step = ref<Step>(1);
+// Drives the direction of the step-transition (slide-in from right vs. left).
+// Updated by every navigation entry-point before `step` changes.
+const direction = ref<'forward' | 'back'>('forward');
 
 // -- Form state --
 const amountInput = ref<string>(''); // string so we can show empty + decimals naturally
@@ -48,6 +51,7 @@ const {
 // -- Lifecycle --
 const reset = () => {
   step.value = 1;
+  direction.value = 'forward';
   amountInput.value = '';
   title.value = '';
   categoryId.value = '';
@@ -55,6 +59,7 @@ const reset = () => {
   date.value = new Date().toISOString().split('T')[0];
   splits.value = [];
   saving.value = false;
+  justSaved.value = false;
   errorMsg.value = null;
 };
 
@@ -74,22 +79,29 @@ watch(
 );
 
 // When the user reaches step 5 for the first time, seed equal splits.
-watch(step, async (s, prev) => {
+// Focus is *not* set here — with the step <Transition mode="out-in"> the next
+// step's DOM doesn't exist yet when this fires. See `onStepEntered` below,
+// which the Transition's after-enter hook calls once mounting is complete.
+watch(step, (s) => {
   if (s === 5 && (!splits.value.length || splits.value.length !== members.value.length)) {
     initSplits();
   }
-  if (s === 1 && prev !== 1) {
-    await nextTick();
-    amountInputEl.value?.focus();
-  }
-  if (s === 2 && prev !== 2) {
-    await nextTick();
-    titleInputEl.value?.focus();
-    // Move cursor to end so back-and-forth doesn't wipe the title selection
-    const el = titleInputEl.value;
-    if (el) el.setSelectionRange(el.value.length, el.value.length);
-  }
 });
+
+// Called by the step <Transition>'s @after-enter — at this point the new
+// step's template ref is bound and we can safely move focus.
+const onStepEntered = () => {
+  if (step.value === 1) {
+    amountInputEl.value?.focus();
+  } else if (step.value === 2) {
+    const el = titleInputEl.value;
+    if (el) {
+      el.focus();
+      // Place caret at the end so re-entering the step keeps the typed text editable.
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }
+};
 
 // -- Validation per step --
 const canAdvance = computed(() => {
@@ -122,6 +134,7 @@ const goBack = () => {
   if (step.value === 1) {
     emit('close');
   } else {
+    direction.value = 'back';
     step.value = (step.value - 1) as Step;
   }
 };
@@ -129,6 +142,7 @@ const goBack = () => {
 const goNext = () => {
   if (!canAdvance.value) return;
   if (step.value < 5) {
+    direction.value = 'forward';
     step.value = (step.value + 1) as Step;
   } else {
     save();
@@ -138,19 +152,27 @@ const goNext = () => {
 // Tile-style selection auto-advances to the next step.
 const pickCategory = (id: string) => {
   categoryId.value = id;
+  direction.value = 'forward';
   step.value = 4;
 };
 const pickPayer = (id: string) => {
   payerId.value = id;
+  direction.value = 'forward';
   step.value = 5;
 };
 
 // -- Save --
+// Three-phase save UX: `saving` shows a spinner during the network call,
+// `justSaved` keeps a green checkmark visible for a beat so the user sees
+// confirmation before the wizard slides away. `justSaved` is cleared by
+// `reset()` on the next open (not after `emit('saved')`) so the checkmark
+// stays on screen during the wizard's exit transition.
 const saving = ref(false);
+const justSaved = ref(false);
 const errorMsg = ref<string | null>(null);
 
 const save = async () => {
-  if (!canAdvance.value || saving.value) return;
+  if (!canAdvance.value || saving.value || justSaved.value) return;
   saving.value = true;
   errorMsg.value = null;
   try {
@@ -166,10 +188,12 @@ const save = async () => {
       finalSplits
     );
     if (!result) throw new Error('Speichern fehlgeschlagen.');
-    emit('saved');
+    saving.value = false;
+    justSaved.value = true;
+    // Let the checkmark linger long enough to read, then close.
+    setTimeout(() => emit('saved'), 650);
   } catch (e: any) {
     errorMsg.value = e?.message ?? 'Speichern fehlgeschlagen.';
-  } finally {
     saving.value = false;
   }
 };
@@ -179,6 +203,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
 
 <template>
   <Teleport to="body">
+    <Transition name="wizard">
     <div
       v-if="open"
       class="fixed inset-0 z-50 bg-base-100 flex flex-col"
@@ -226,9 +251,10 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
       </ul>
 
       <!-- Body -->
-      <section class="flex-1 overflow-y-auto px-4 py-6">
+      <section class="flex-1 overflow-y-auto px-4 py-6 relative">
+        <Transition :name="'step-' + direction" mode="out-in" @after-enter="onStepEntered">
         <!-- Step 1: Amount -->
-        <div v-if="step === 1" :key="'s1'" class="animate-fade-in flex flex-col items-center gap-4">
+        <div v-if="step === 1" :key="1" class="flex flex-col items-center gap-4">
           <label class="text-sm text-base-content/60">Wie viel hast du ausgegeben?</label>
           <div class="flex items-baseline gap-2">
             <input
@@ -247,7 +273,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
         </div>
 
         <!-- Step 2: Title -->
-        <div v-else-if="step === 2" :key="'s2'" class="animate-fade-in flex flex-col gap-3">
+        <div v-else-if="step === 2" :key="2" class="flex flex-col gap-3">
           <label class="text-sm text-base-content/60">Was wurde gekauft?</label>
           <input
             ref="titleInputEl"
@@ -260,12 +286,12 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
         </div>
 
         <!-- Step 3: Category -->
-        <div v-else-if="step === 3" :key="'s3'" class="animate-fade-in flex flex-col gap-3">
+        <div v-else-if="step === 3" :key="3" class="flex flex-col gap-3">
           <label class="text-sm text-base-content/60">Welche Kategorie?</label>
           <div class="grid grid-cols-3 gap-2">
             <button
               type="button"
-              class="btn h-20 flex-col gap-1 normal-case"
+              class="btn h-20 flex-col gap-1 normal-case active:scale-95 transition-transform duration-100"
               :class="categoryId === '' ? 'btn-primary' : 'btn-outline'"
               @click="pickCategory('')"
             >
@@ -276,7 +302,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
               v-for="c in categories"
               :key="c.id"
               type="button"
-              class="btn h-20 flex-col gap-1 normal-case"
+              class="btn h-20 flex-col gap-1 normal-case active:scale-95 transition-transform duration-100"
               :class="categoryId === c.id ? 'btn-primary' : 'btn-outline'"
               @click="pickCategory(c.id)"
             >
@@ -295,7 +321,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
         </div>
 
         <!-- Step 4: Payer -->
-        <div v-else-if="step === 4" :key="'s4'" class="animate-fade-in flex flex-col gap-3">
+        <div v-else-if="step === 4" :key="4" class="flex flex-col gap-3">
           <label class="text-sm text-base-content/60">Wer hat bezahlt?</label>
           <div v-if="members.length === 0" class="alert alert-warning text-sm">
             <span>Keine Mitglieder vorhanden.</span>
@@ -308,7 +334,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
               v-for="m in members"
               :key="m.id"
               type="button"
-              class="btn h-20 flex-col gap-1 normal-case"
+              class="btn h-20 flex-col gap-1 normal-case active:scale-95 transition-transform duration-100"
               :class="payerId === m.id ? 'btn-primary' : 'btn-outline'"
               @click="pickPayer(m.id)"
             >
@@ -319,7 +345,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
         </div>
 
         <!-- Step 5: Splits + Date -->
-        <div v-else-if="step === 5" :key="'s5'" class="animate-fade-in flex flex-col gap-4">
+        <div v-else-if="step === 5" :key="5" class="flex flex-col gap-4">
           <div>
             <label class="text-sm text-base-content/60">Für wen?</label>
             <p class="text-xs text-base-content/50 mt-1">
@@ -391,17 +417,25 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
 
           <p v-if="errorMsg" class="text-error text-sm">{{ errorMsg }}</p>
         </div>
+        </Transition>
       </section>
 
       <!-- Footer -->
       <footer class="px-4 py-3 border-t border-base-300 shrink-0">
         <button
           type="button"
-          class="btn btn-primary btn-block btn-lg gap-2"
-          :disabled="!canAdvance || saving"
+          class="btn btn-block btn-lg gap-2"
+          :class="justSaved ? 'btn-success' : 'btn-primary'"
+          :disabled="!canAdvance || saving || justSaved"
           @click="goNext"
         >
-          <span v-if="saving" class="loading loading-spinner loading-sm" />
+          <template v-if="justSaved">
+            <CheckIcon class="h-5 w-5 animate-pop" />
+            Gespeichert
+          </template>
+          <template v-else-if="saving">
+            <span class="loading loading-spinner loading-sm" />
+          </template>
           <template v-else-if="step === 5">
             <CheckIcon class="h-5 w-5" />
             Speichern
@@ -413,15 +447,55 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
         </button>
       </footer>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
 <style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.25s ease-out;
+/* --- Wizard entrance/exit: slide up from the bottom edge of the viewport. */
+.wizard-enter-active,
+.wizard-leave-active {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
 }
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+.wizard-enter-from,
+.wizard-leave-to {
+  transform: translateY(100%);
+  opacity: 0.6;
+}
+
+/* --- Step transitions: slide horizontally based on travel direction. */
+.step-forward-enter-active,
+.step-forward-leave-active,
+.step-back-enter-active,
+.step-back-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+/* Going forward: new step slides in from the right, old step exits to the left. */
+.step-forward-enter-from {
+  transform: translateX(36px);
+  opacity: 0;
+}
+.step-forward-leave-to {
+  transform: translateX(-36px);
+  opacity: 0;
+}
+/* Going back: mirror image. */
+.step-back-enter-from {
+  transform: translateX(-36px);
+  opacity: 0;
+}
+.step-back-leave-to {
+  transform: translateX(36px);
+  opacity: 0;
+}
+
+/* --- Save success: little spring on the checkmark so the win feels earned. */
+.animate-pop {
+  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes pop {
+  0%   { transform: scale(0);   opacity: 0; }
+  60%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
 }
 </style>

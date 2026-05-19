@@ -12,7 +12,8 @@ export type WidgetType =
     | 'shopping-list'
     | 'recent-activity'
     | 'finance-snapshot'
-    | 'quick-add';
+    | 'quick-add'
+    | 'quick-expense';
 
 export interface DashboardWidget {
     id: string;

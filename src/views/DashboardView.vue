@@ -30,6 +30,7 @@ import WidgetShoppingList from '../components/widgets/WidgetShoppingList.vue';
 import WidgetRecentActivity from '../components/widgets/WidgetRecentActivity.vue';
 import WidgetFinanceSnapshot from '../components/widgets/WidgetFinanceSnapshot.vue';
 import WidgetQuickAdd from '../components/widgets/WidgetQuickAdd.vue';
+import WidgetQuickExpense from '../components/widgets/WidgetQuickExpense.vue';
 
 import WidgetGallery from '../components/dashboard/WidgetGallery.vue';
 import ItemRow from '../components/ItemRow.vue';
@@ -47,6 +48,7 @@ const WIDGET_REGISTRY: Record<string, any> = {
   'recent-activity': WidgetRecentActivity,
   'finance-snapshot': WidgetFinanceSnapshot,
   'quick-add': WidgetQuickAdd,
+  'quick-expense': WidgetQuickExpense,
 };
 
 // --- State ---
@@ -163,7 +165,7 @@ const onConfirmReset = () => {
       :animation="200"
       ghost-class="dash-ghost"
       drag-class="dash-drag"
-      class="grid grid-cols-2 lg:grid-cols-4 gap-4"
+      class="grid grid-cols-2 gap-4"
       tag="div"
     >
       <template #item="{ element: widget }">

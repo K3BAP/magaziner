@@ -19,6 +19,8 @@ const { members, addTransaction } = useFinance();
 
 type Step = 1 | 2 | 3;
 const step = ref<Step>(1);
+// Drives the step-transition direction; mirrors ExpenseWizard.
+const direction = ref<'forward' | 'back'>('forward');
 
 const amountInput = ref<string>('');
 const amount = computed(() => {
@@ -29,18 +31,22 @@ const payerId = ref<string>('');
 const receiverId = ref<string>('');
 const date = ref(new Date().toISOString().split('T')[0]);
 
+// Three-phase save UX (matches ExpenseWizard): saving → justSaved → emit.
 const saving = ref(false);
+const justSaved = ref(false);
 const errorMsg = ref<string | null>(null);
 
 const amountInputEl = ref<HTMLInputElement | null>(null);
 
 const reset = () => {
   step.value = 1;
+  direction.value = 'forward';
   amountInput.value = '';
   payerId.value = '';
   receiverId.value = '';
   date.value = new Date().toISOString().split('T')[0];
   saving.value = false;
+  justSaved.value = false;
   errorMsg.value = null;
 };
 
@@ -55,12 +61,13 @@ watch(
   }
 );
 
-watch(step, async (s, prev) => {
-  if (s === 1 && prev !== 1) {
-    await nextTick();
+// Focus is handled by the step <Transition>'s @after-enter so that the
+// new step's DOM has finished mounting before we try to grab the ref.
+const onStepEntered = () => {
+  if (step.value === 1) {
     amountInputEl.value?.focus();
   }
-});
+};
 
 const canAdvance = computed(() => {
   switch (step.value) {
@@ -79,6 +86,7 @@ const goBack = () => {
   if (step.value === 1) {
     emit('close');
   } else {
+    direction.value = 'back';
     step.value = (step.value - 1) as Step;
   }
 };
@@ -86,6 +94,7 @@ const goBack = () => {
 const goNext = () => {
   if (!canAdvance.value) return;
   if (step.value < 3) {
+    direction.value = 'forward';
     step.value = (step.value + 1) as Step;
   } else {
     save();
@@ -96,6 +105,7 @@ const pickPayer = (id: string) => {
   payerId.value = id;
   // If the previously-chosen receiver is now the same as the payer, clear it.
   if (receiverId.value === id) receiverId.value = '';
+  direction.value = 'forward';
   step.value = 3;
 };
 
@@ -105,7 +115,7 @@ const pickReceiver = (id: string) => {
 };
 
 const save = async () => {
-  if (!canAdvance.value || saving.value) return;
+  if (!canAdvance.value || saving.value || justSaved.value) return;
   saving.value = true;
   errorMsg.value = null;
   try {
@@ -118,10 +128,11 @@ const save = async () => {
       receiverId.value
     );
     if (!result) throw new Error('Speichern fehlgeschlagen.');
-    emit('saved');
+    saving.value = false;
+    justSaved.value = true;
+    setTimeout(() => emit('saved'), 650);
   } catch (e: any) {
     errorMsg.value = e?.message ?? 'Speichern fehlgeschlagen.';
-  } finally {
     saving.value = false;
   }
 };
@@ -131,6 +142,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
 
 <template>
   <Teleport to="body">
+    <Transition name="wizard">
     <div
       v-if="open"
       class="fixed inset-0 z-50 bg-base-100 flex flex-col"
@@ -178,9 +190,10 @@ const stepLabels = ['Betrag', 'Von', 'An'];
       </ul>
 
       <!-- Body -->
-      <section class="flex-1 overflow-y-auto px-4 py-6">
+      <section class="flex-1 overflow-y-auto px-4 py-6 relative">
+        <Transition :name="'step-' + direction" mode="out-in" @after-enter="onStepEntered">
         <!-- Step 1: Amount -->
-        <div v-if="step === 1" :key="'p1'" class="animate-fade-in flex flex-col items-center gap-4">
+        <div v-if="step === 1" :key="1" class="flex flex-col items-center gap-4">
           <label class="text-sm text-base-content/60">Wie viel wurde überwiesen?</label>
           <div class="flex items-baseline gap-2">
             <input
@@ -199,7 +212,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
         </div>
 
         <!-- Step 2: Payer -->
-        <div v-else-if="step === 2" :key="'p2'" class="animate-fade-in flex flex-col gap-3">
+        <div v-else-if="step === 2" :key="2" class="flex flex-col gap-3">
           <label class="text-sm text-base-content/60">Von wem?</label>
           <div v-if="members.length === 0" class="alert alert-warning text-sm">
             <span>Keine Mitglieder vorhanden.</span>
@@ -212,7 +225,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
               v-for="m in members"
               :key="m.id"
               type="button"
-              class="btn h-20 flex-col gap-1 normal-case"
+              class="btn h-20 flex-col gap-1 normal-case active:scale-95 transition-transform duration-100"
               :class="payerId === m.id ? 'btn-primary' : 'btn-outline'"
               @click="pickPayer(m.id)"
             >
@@ -223,7 +236,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
         </div>
 
         <!-- Step 3: Receiver + Date -->
-        <div v-else-if="step === 3" :key="'p3'" class="animate-fade-in flex flex-col gap-4">
+        <div v-else-if="step === 3" :key="3" class="flex flex-col gap-4">
           <div>
             <label class="text-sm text-base-content/60">An wen?</label>
           </div>
@@ -232,7 +245,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
               v-for="m in members"
               :key="m.id"
               type="button"
-              class="btn h-20 flex-col gap-1 normal-case"
+              class="btn h-20 flex-col gap-1 normal-case active:scale-95 transition-transform duration-100"
               :class="[
                 m.id === payerId
                   ? 'btn-disabled opacity-40'
@@ -263,6 +276,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
 
           <p v-if="errorMsg" class="text-error text-sm">{{ errorMsg }}</p>
         </div>
+        </Transition>
       </section>
 
       <!-- Footer -->
@@ -270,10 +284,16 @@ const stepLabels = ['Betrag', 'Von', 'An'];
         <button
           type="button"
           class="btn btn-success btn-block btn-lg gap-2"
-          :disabled="!canAdvance || saving"
+          :disabled="!canAdvance || saving || justSaved"
           @click="goNext"
         >
-          <span v-if="saving" class="loading loading-spinner loading-sm" />
+          <template v-if="justSaved">
+            <CheckIcon class="h-5 w-5 animate-pop" />
+            Gebucht
+          </template>
+          <template v-else-if="saving">
+            <span class="loading loading-spinner loading-sm" />
+          </template>
           <template v-else-if="step === 3">
             <CheckIcon class="h-5 w-5" />
             Zahlung buchen
@@ -285,15 +305,53 @@ const stepLabels = ['Betrag', 'Von', 'An'];
         </button>
       </footer>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
 <style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.25s ease-out;
+/* --- Wizard entrance/exit: slide up from the bottom edge of the viewport. */
+.wizard-enter-active,
+.wizard-leave-active {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
 }
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+.wizard-enter-from,
+.wizard-leave-to {
+  transform: translateY(100%);
+  opacity: 0.6;
+}
+
+/* --- Step transitions: slide horizontally based on travel direction. */
+.step-forward-enter-active,
+.step-forward-leave-active,
+.step-back-enter-active,
+.step-back-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.step-forward-enter-from {
+  transform: translateX(36px);
+  opacity: 0;
+}
+.step-forward-leave-to {
+  transform: translateX(-36px);
+  opacity: 0;
+}
+.step-back-enter-from {
+  transform: translateX(-36px);
+  opacity: 0;
+}
+.step-back-leave-to {
+  transform: translateX(36px);
+  opacity: 0;
+}
+
+/* --- Save success: small spring on the checkmark. */
+.animate-pop {
+  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes pop {
+  0%   { transform: scale(0);   opacity: 0; }
+  60%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
 }
 </style>
