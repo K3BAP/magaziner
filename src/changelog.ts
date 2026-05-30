@@ -25,6 +25,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.1',
+    date: '2026-05-30',
+    title: 'Titel-Vorschläge',
+    items: [
+      'Beim Erfassen einer Ausgabe schlägt dir der Dialog jetzt Titel aus deinen letzten Einkäufen vor — einmal tippen genügt.',
+    ],
+  },
+  {
     version: '0.5.0',
     date: '2026-05-19',
     title: 'Schnellere Ausgaben',

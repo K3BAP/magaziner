@@ -18,7 +18,7 @@ const emit = defineEmits<{
   'add-member': [];
 }>();
 
-const { members, categories, addTransaction } = useFinance();
+const { members, categories, transactions, addTransaction } = useFinance();
 
 // -- Step state --
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -34,6 +34,29 @@ const amount = computed(() => {
   return Number.isFinite(n) ? n : NaN;
 });
 const title = ref('');
+
+// Tappable title suggestions drawn from past expenses, ranked by how often each
+// title was used (so staples like "Wocheneinkauf" surface first). The list also
+// narrows against what's already typed, acting as a lightweight autocomplete.
+const titleSuggestions = computed(() => {
+  const counts = new Map<string, { label: string; n: number }>();
+  for (const t of transactions.value) {
+    if (t.type !== 'expense') continue;
+    const label = t.title?.trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    const entry = counts.get(key);
+    if (entry) entry.n++;
+    else counts.set(key, { label, n: 1 });
+  }
+  const q = title.value.trim().toLowerCase();
+  return [...counts.values()]
+    .filter((e) => e.label.toLowerCase() !== q && (!q || e.label.toLowerCase().includes(q)))
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 5)
+    .map((e) => e.label);
+});
+
 const categoryId = ref<string>(''); // '' === keine
 const payerId = ref<string>('');
 const date = ref(new Date().toISOString().split('T')[0]);
@@ -101,6 +124,13 @@ const onStepEntered = () => {
       el.setSelectionRange(el.value.length, el.value.length);
     }
   }
+};
+
+// Fill the title from a suggestion chip and keep the input focused so the user
+// can still tweak the text before continuing (we deliberately don't auto-advance).
+const pickSuggestion = (s: string) => {
+  title.value = s;
+  titleInputEl.value?.focus();
 };
 
 // -- Validation per step --
@@ -283,6 +313,17 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
             class="input input-bordered input-lg w-full"
             @keyup.enter="goNext"
           />
+          <div v-if="titleSuggestions.length" class="flex flex-wrap gap-2">
+            <button
+              v-for="s in titleSuggestions"
+              :key="s"
+              type="button"
+              class="badge badge-lg badge-outline gap-1 cursor-pointer hover:badge-primary active:scale-95 transition-transform"
+              @click="pickSuggestion(s)"
+            >
+              {{ s }}
+            </button>
+          </div>
         </div>
 
         <!-- Step 3: Category -->
