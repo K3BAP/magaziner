@@ -15,6 +15,10 @@ import TheNavbar from './components/layout/TheNavbar.vue';
 import TheDrawer from './components/layout/TheDrawer.vue';
 import ChangelogModal from './components/ChangelogModal.vue';
 import { useChangelog } from './composables/useChangelog';
+import { useKeyboardInset } from './composables/useKeyboardInset';
+
+// Track the on-screen keyboard once for the whole app (publishes --keyboard-inset).
+useKeyboardInset();
 
 const { user, isAuthReady } = useAuth();
 const { fetchInventory } = useInventory();
@@ -96,7 +100,10 @@ watch(activeHouseholdId, (hid, prev) => {
     <div class="drawer-content flex flex-col min-h-screen bg-base-200">
       <TheNavbar />
 
-      <div class="p-4 container mx-auto max-w-md flex-grow">
+      <div
+        class="p-4 container mx-auto max-w-md flex-grow"
+        :style="{ paddingBottom: 'calc(1rem + var(--keyboard-inset, 0px))' }"
+      >
         <router-view />
       </div>
     </div>

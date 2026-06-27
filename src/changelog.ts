@@ -33,6 +33,7 @@ export const changelog: ChangelogEntry[] = [
       'Deine Listen lassen sich per Drag & Drop in deine Wunschreihenfolge ziehen.',
       'Neue Einträge werden automatisch nach Kategorie einsortiert – so steht z. B. alles Gemüse beieinander. Über „Regale sortieren“ legst du die Reihenfolge passend zu deinem Supermarkt fest.',
       'Die Kategorie eines Eintrags kannst du jederzeit mit einem Tipp ändern.',
+      'Eingabefelder werden auf dem Handy nicht mehr von der Tastatur verdeckt – das betroffene Feld rückt jetzt automatisch nach oben.',
     ],
   },
   {

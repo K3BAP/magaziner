@@ -96,21 +96,21 @@ const navigateToRecipe = (id: string) => {
     </div>
 
     <!-- Add Modal -->
-    <div v-if="showAddModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div class="bg-base-100 p-6 rounded-xl shadow-xl w-full max-w-sm">
+    <div v-if="showAddModal" class="modal modal-open modal-bottom sm:modal-middle" @click.self="showAddModal = false">
+      <div class="modal-box">
         <h3 class="font-bold text-lg mb-4">Neues Rezept</h3>
-        <input 
-          v-model="newRecipeName" 
+        <input
+          v-model="newRecipeName"
           @keyup.enter="handleCreate"
-          type="text" 
-          placeholder="Name des Gerichts (z.B. Pfannkuchen)" 
-          class="input input-bordered w-full mb-4" 
+          type="text"
+          placeholder="Name des Gerichts (z.B. Pfannkuchen)"
+          class="input input-bordered w-full mb-4"
           autofocus
         />
         <div class="flex justify-end gap-2">
           <button @click="showAddModal = false" class="btn btn-ghost">Abbrechen</button>
-          <button 
-            @click="handleCreate" 
+          <button
+            @click="handleCreate"
             class="btn btn-primary"
             :disabled="!newRecipeName.trim() || isCreating"
           >
