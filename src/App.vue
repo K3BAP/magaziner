@@ -4,6 +4,8 @@ import { useAuth } from './composables/useAuth';
 import { useInventory } from './composables/useInventory';
 import { useTodos } from './composables/useTodos';
 import { useShoppingList } from './composables/useShoppingList';
+import { useShoppingLists } from './composables/useShoppingLists';
+import { useShoppingCategories } from './composables/useShoppingCategories';
 import { useRecipes } from './composables/useRecipes';
 import { useFinance } from './composables/useFinance';
 import { useHouseholds } from './composables/useHouseholds';
@@ -17,7 +19,9 @@ import { useChangelog } from './composables/useChangelog';
 const { user, isAuthReady } = useAuth();
 const { fetchInventory } = useInventory();
 const { fetchTodos } = useTodos();
-const { fetchItems: fetchShoppingItems } = useShoppingList();
+const { fetchItems: fetchShoppingItems, clearItems: clearShoppingItems } = useShoppingList();
+const { fetchLists: fetchShoppingLists, clearLists: clearShoppingLists } = useShoppingLists();
+const { fetchCategories: fetchShoppingCategories, clearCategories: clearShoppingCategories } = useShoppingCategories();
 const { fetchRecipes } = useRecipes();
 const { fetchMembers, fetchCategories: fetchFinanceCategories, fetchTransactions } = useFinance();
 const { fetchMyHouseholds, clearHouseholds } = useHouseholds();
@@ -28,11 +32,19 @@ const route = useRoute();
 const refetchAllData = () => {
   fetchInventory();
   fetchTodos();
-  fetchShoppingItems();
   fetchRecipes();
   fetchMembers();
   fetchFinanceCategories();
   fetchTransactions();
+  refetchShopping();
+};
+
+// Shopping needs ordering: aisles and lists first (the latter resolves the
+// active list), then the entries of that list.
+const refetchShopping = async () => {
+  await fetchShoppingCategories();
+  await fetchShoppingLists();
+  await fetchShoppingItems();
 };
 
 // On user login: useAuth has already loaded the profile by the time isAuthReady
@@ -51,6 +63,9 @@ watch(
       bootstrapChangelog();
     } else {
       clearHouseholds();
+      clearShoppingItems();
+      clearShoppingLists();
+      clearShoppingCategories();
     }
   },
   { immediate: true }

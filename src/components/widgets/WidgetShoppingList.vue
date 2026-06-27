@@ -1,16 +1,31 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue';
-import { useShoppingList } from '../../composables/useShoppingList';
+import { onMounted, ref } from 'vue';
+import { supabase } from '../../supabase';
 import { ShoppingCartIcon } from '@heroicons/vue/24/outline';
 import WidgetShell from './WidgetShell.vue';
 
-const { items, fetchItems, loading } = useShoppingList();
+// Self-contained household-wide count of open entries across all lists. Kept
+// independent of useShoppingList (whose state is scoped to the active list).
+const itemCount = ref(0);
+const loading = ref(false);
 
-onMounted(() => {
-  fetchItems();
-});
+const fetchCount = async () => {
+  try {
+    loading.value = true;
+    const { count, error } = await supabase
+      .from('shopping_list')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_completed', false);
+    if (error) throw error;
+    itemCount.value = count ?? 0;
+  } catch (error) {
+    console.error('Fehler beim Laden der Einkaufslisten-Anzahl:', error);
+  } finally {
+    loading.value = false;
+  }
+};
 
-const itemCount = computed(() => items.value.filter(i => !i.is_completed).length);
+onMounted(fetchCount);
 </script>
 
 <template>

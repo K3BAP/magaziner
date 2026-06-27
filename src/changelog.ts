@@ -25,6 +25,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.6.0',
+    date: '2026-06-27',
+    title: 'Neue Einkaufsliste',
+    items: [
+      'Du kannst jetzt mehrere Einkaufslisten pro Haushalt führen (z. B. „Wocheneinkauf“, „Drogerie“, „Baumarkt“) und oben per Tab zwischen ihnen wechseln.',
+      'Deine Listen lassen sich per Drag & Drop in deine Wunschreihenfolge ziehen.',
+      'Neue Einträge werden automatisch nach Kategorie einsortiert – so steht z. B. alles Gemüse beieinander. Über „Regale sortieren“ legst du die Reihenfolge passend zu deinem Supermarkt fest.',
+      'Die Kategorie eines Eintrags kannst du jederzeit mit einem Tipp ändern.',
+    ],
+  },
+  {
     version: '0.5.1',
     date: '2026-05-30',
     title: 'Titel-Vorschläge',

@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
 import { useActiveHousehold } from './useActiveHousehold';
+import { guessCategoryKey } from '../utils/shoppingCategories';
 
 export interface ItemInstance {
   id: string;
@@ -183,10 +184,34 @@ export function useInventory() {
       .eq('title', itemName)
       .maybeSingle();
 
-    if (!existing) {
-      alert(`⚠️ Achtung! "${itemName}" ist knapp (${remainingStock} übrig). Wurde auf die Einkaufsliste gesetzt.`);
-      await supabase.from('shopping_list').insert({ title: itemName, household_id: requireHousehold() });
-    }
+    if (existing) return;
+
+    const householdId = requireHousehold();
+
+    // Drop the auto-added entry onto the household's first list and its matching
+    // aisle so it shows up grouped just like a manual add.
+    const { data: defaultList } = await supabase
+      .from('shopping_lists')
+      .select('id')
+      .eq('household_id', householdId)
+      .order('position', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const { data: category } = await supabase
+      .from('shopping_categories')
+      .select('id')
+      .eq('household_id', householdId)
+      .eq('key', guessCategoryKey(itemName))
+      .maybeSingle();
+
+    alert(`⚠️ Achtung! "${itemName}" ist knapp (${remainingStock} übrig). Wurde auf die Einkaufsliste gesetzt.`);
+    await supabase.from('shopping_list').insert({
+      title: itemName,
+      household_id: householdId,
+      list_id: defaultList?.id ?? null,
+      category_id: category?.id ?? null,
+    });
   };
 
   // 4. UPDATE QUANTITY (Einer spezifischen Instanz)
