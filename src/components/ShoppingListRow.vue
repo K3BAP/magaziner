@@ -1,10 +1,25 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue';
 import { type ShoppingItem, useShoppingList } from '../composables/useShoppingList';
 import { useShoppingCategories } from '../composables/useShoppingCategories';
+import { TagIcon, TrashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
-defineProps<{ item: ShoppingItem }>();
+const props = defineProps<{ item: ShoppingItem }>();
 const { toggleItem, deleteItem, setItemCategory } = useShoppingList();
 const { categories } = useShoppingCategories();
+
+// Bottom-sheet picker instead of a CSS dropdown: a fixed-position modal isn't
+// clipped by the group card's `overflow-hidden`, and it's easier to tap.
+const showPicker = ref(false);
+
+const currentCategory = computed(
+  () => categories.value.find((c) => c.id === props.item.category_id) ?? null,
+);
+
+const pick = (categoryId: string) => {
+  setItemCategory(props.item, categoryId);
+  showPicker.value = false;
+};
 </script>
 
 <template>
@@ -27,24 +42,14 @@ const { categories } = useShoppingCategories();
     </div>
 
     <div class="flex items-center gap-1 shrink-0">
-      <!-- Kategorie-Wechsel -->
-      <div class="dropdown dropdown-end">
-        <button
-          tabindex="0"
-          class="btn btn-ghost btn-sm btn-circle opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Kategorie ändern"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5a1.99 1.99 0 011.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z" /></svg>
-        </button>
-        <ul tabindex="0" class="dropdown-content z-20 menu p-2 shadow-lg bg-base-100 rounded-box w-56 max-h-72 overflow-y-auto flex-nowrap">
-          <li class="menu-title text-xs">Kategorie</li>
-          <li v-for="cat in categories" :key="cat.id">
-            <a :class="{ 'active': item.category_id === cat.id }" @click="setItemCategory(item, cat.id)">
-              <span>{{ cat.icon }}</span> {{ cat.name }}
-            </a>
-          </li>
-        </ul>
-      </div>
+      <!-- Kategorie ändern -->
+      <button
+        class="btn btn-ghost btn-sm btn-circle opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Kategorie ändern"
+        @click="showPicker = true"
+      >
+        <TagIcon class="h-5 w-5" />
+      </button>
 
       <!-- Löschen -->
       <button
@@ -52,8 +57,27 @@ const { categories } = useShoppingCategories();
         class="btn btn-ghost btn-sm btn-circle text-error opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
         title="Löschen"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        <TrashIcon class="h-5 w-5" />
       </button>
+    </div>
+
+    <!-- Kategorie-Auswahl als Bottom-Sheet (position: fixed -> nicht vom Card-Overflow abgeschnitten) -->
+    <div v-if="showPicker" class="modal modal-open modal-bottom sm:modal-middle" @click.self="showPicker = false">
+      <div class="modal-box">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="font-bold text-lg">Kategorie wählen</h3>
+          <button class="btn btn-sm btn-ghost btn-circle" @click="showPicker = false"><XMarkIcon class="h-5 w-5" /></button>
+        </div>
+        <p class="text-sm text-base-content/60 truncate mb-3">{{ item.title }}</p>
+
+        <ul class="menu p-0 w-full">
+          <li v-for="cat in categories" :key="cat.id">
+            <a :class="{ 'active': cat.id === currentCategory?.id }" @click="pick(cat.id)">
+              <span class="text-base">{{ cat.icon }}</span> {{ cat.name }}
+            </a>
+          </li>
+        </ul>
+      </div>
     </div>
 
   </div>
