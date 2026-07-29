@@ -4,9 +4,16 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 
+// HTTPS ist Default, damit die Kamera (Barcode-Scanner) und die PWA-Installation
+// auch beim Testen vom Handy über das LAN funktionieren. `npm run dev:http`
+// schaltet es ab — nötig für automatisierte Browser-Checks, die das
+// selbstsignierte Zertifikat nicht akzeptieren. Auf localhost ist auch HTTP ein
+// Secure Context, die Kamera funktioniert dort also weiterhin.
+const useHttps = process.env.NO_HTTPS !== '1'
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [tailwindcss(), vue(), basicSsl(), VitePWA({
+  plugins: [tailwindcss(), vue(), ...(useHttps ? [basicSsl()] : []), VitePWA({
       registerType: 'autoUpdate', // Updates werden sofort geladen
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {

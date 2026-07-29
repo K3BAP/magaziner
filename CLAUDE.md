@@ -5,12 +5,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # Start Vite dev server (HTTPS via basic-ssl plugin)
-npm run build    # Build for production
-npm run preview  # Preview production build
+npm run dev       # Start Vite dev server (HTTPS via basic-ssl plugin)
+npm run dev:http  # Same, but plain HTTP — for automated browser checks (see Verification)
+npm run build     # Build for production
+npm run preview   # Preview production build
 ```
 
-No test runner or linter is configured.
+No test runner or linter is configured. `npm run build` is the only static check.
+
+## Verification
+
+There is one Supabase project and it holds **production data**. To exercise the UI without
+touching it, the project has an isolated test fixture.
+
+**Never seed or test against any household other than
+`00000000-0000-4000-8000-000000000001`.** All fixture rows use `00000000-…` UUIDs; real rows are
+`gen_random_uuid()`.
+
+The pieces:
+
+- `scripts/seed-test-data.sql` — idempotent fixture (test household, two shopping lists with
+  checked and unchecked entries, aisles, todos). Run it via the Supabase MCP `execute_sql`; it runs
+  privileged and bypasses RLS, so no service-role key is needed. It resolves the test user by
+  e-mail and aborts with a clear message if that user is missing.
+- The test user `test@magaziner.test` lives in Supabase Auth. Creating users and typing passwords
+  is the human's job — if it's missing, ask.
+- `.env.local` (gitignored via `*.local`) holds `VITE_DEV_LOGIN_EMAIL` / `VITE_DEV_LOGIN_PASSWORD`.
+  When set, `src/main.js` signs that user in **before** mounting, so the router guard finds a
+  session. Guarded by `import.meta.env.DEV`, so the block is eliminated from production builds —
+  re-check with `grep DEV_LOGIN dist/assets/*.js` after touching it.
+- `.claude/launch.json` runs `dev:http` on port 5173. HTTP because the automated browser rejects
+  basic-ssl's self-signed certificate; `localhost` is a secure context either way, so the camera
+  still works. Testing the PWA from a phone over the LAN still needs plain `npm run dev`.
+
+The loop: seed → `preview_start` → drive the UI with the browser tools → check
+`read_console_messages` → confirm the write server-side with `execute_sql` → re-seed to restore the
+fixture.
 
 ## Architecture
 
