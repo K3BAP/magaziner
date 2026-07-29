@@ -2,10 +2,10 @@
 import { ref, computed } from 'vue';
 import { type ShoppingItem, useShoppingList } from '../composables/useShoppingList';
 import { useShoppingCategories } from '../composables/useShoppingCategories';
-import { TagIcon, TrashIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { TagIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps<{ item: ShoppingItem }>();
-const { toggleItem, deleteItem, setItemCategory } = useShoppingList();
+const { toggleItem, setItemCategory } = useShoppingList();
 const { categories } = useShoppingCategories();
 
 // Bottom-sheet picker instead of a CSS dropdown: a fixed-position modal isn't
@@ -49,15 +49,6 @@ const pick = (categoryId: string) => {
         @click="showPicker = true"
       >
         <TagIcon class="h-5 w-5" />
-      </button>
-
-      <!-- Löschen -->
-      <button
-        @click="deleteItem(item.id)"
-        class="btn btn-ghost btn-sm btn-circle text-error opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
-        title="Löschen"
-      >
-        <TrashIcon class="h-5 w-5" />
       </button>
     </div>
 

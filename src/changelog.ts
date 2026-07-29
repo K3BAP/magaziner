@@ -25,6 +25,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.6.1',
+    date: '2026-07-29',
+    title: 'Aufgeräumte Einkaufsliste',
+    items: [
+      'Einträge der Einkaufsliste haben keinen eigenen Löschen-Button mehr – ein versehentlicher Tipper kann dir also nichts mehr wegräumen.',
+      'Stattdessen entfernst du mit „Abgehakte löschen“ am Ende der Liste alle erledigten Einträge auf einmal – natürlich erst nach einer Rückfrage.',
+    ],
+  },
+  {
     version: '0.6.0',
     date: '2026-06-27',
     title: 'Neue Einkaufsliste',

@@ -115,16 +115,22 @@ export function useShoppingList() {
         }
     };
 
-    // 4. Delete Item
-    const deleteItem = async (id: string) => {
-        const prevItems = [...items.value];
-        items.value = items.value.filter(i => i.id !== id);
+    // 4. Delete all completed entries of the active list.
+    //    Deliberately keyed on the collected ids instead of `.eq('is_completed',
+    //    true)` so exactly the entries the user saw ticked off disappear — and
+    //    none that another household member ticked off in the meantime.
+    const deleteCompleted = async () => {
+        const doomedIds = items.value.filter(i => i.is_completed).map(i => i.id);
+        if (doomedIds.length === 0) return;
 
-        const { error } = await supabase.from('shopping_list').delete().eq('id', id);
+        const prevItems = [...items.value];
+        items.value = items.value.filter(i => !i.is_completed);
+
+        const { error } = await supabase.from('shopping_list').delete().in('id', doomedIds);
 
         if (error) {
             items.value = prevItems; // Rollback
-            console.error('Fehler beim Löschen:', error);
+            console.error('Fehler beim Löschen der abgehakten Einträge:', error);
         }
     };
 
@@ -189,6 +195,9 @@ export function useShoppingList() {
         return groups;
     });
 
+    // `items` only ever holds the active list, so this is list-scoped already.
+    const completedCount = computed(() => items.value.filter(i => i.is_completed).length);
+
     const clearItems = () => {
         items.value = [];
     };
@@ -197,10 +206,11 @@ export function useShoppingList() {
         items,
         loading,
         groupedItems,
+        completedCount,
         fetchItems,
         addItem,
         toggleItem,
-        deleteItem,
+        deleteCompleted,
         setItemCategory,
         clearItems
     };
