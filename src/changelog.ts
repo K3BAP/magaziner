@@ -25,6 +25,18 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.7.0',
+    date: '2026-08-07',
+    title: 'Ausgaben durchsuchen',
+    items: [
+      'Der Reiter „Ausgaben“ hat jetzt eine Suchleiste: Tippe los und du findest Einträge über Titel, Notiz, Personen und Kategorie. Umlaute sind dabei egal – „Muesli“ findet auch „Müsli“.',
+      'Mehrere Wörter grenzen die Suche weiter ein: „rewe mai“ zeigt nur Einträge, in denen beides vorkommt.',
+      'Über das Filter-Symbol öffnest du die erweiterten Filter: Typ (Alle, Ausgaben oder Zahlungen), Kategorien inklusive „Ohne Kategorie“, Personen – wahlweise als Zahler, als Beteiligte oder egal – sowie ein Zeitraum mit Schnellauswahl („Dieser Monat“, „Letzter Monat“, „Dieses Jahr“) oder freien Von-Bis-Daten.',
+      'Zusätzlich kannst du nach Betrag von–bis eingrenzen und die Liste nach Datum, Betrag oder Titel sortieren – auf- oder absteigend.',
+      'Über der Liste siehst du sofort, wie viele Treffer es gibt und wie viel Geld dahintersteckt. Aktive Filter erscheinen als Chips: einzeln antippen zum Entfernen oder mit „Zurücksetzen“ alle auf einmal löschen.',
+    ],
+  },
+  {
     version: '0.6.1',
     date: '2026-07-29',
     title: 'Aufgeräumte Einkaufsliste',

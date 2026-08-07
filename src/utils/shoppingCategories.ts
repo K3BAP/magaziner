@@ -8,6 +8,8 @@
  * and are manual-only. Anything the dictionary can't place lands in 'misc'.
  */
 
+import { normalize } from './text';
+
 export interface ShoppingCategorySeed {
   key: string;
   name: string;
@@ -91,20 +93,6 @@ const KEYWORD_MAP: Record<string, string[]> = {
     'frischhaltefolie', 'batterie', 'glühbirne', 'gluehbirne', 'tampon', 'binde',
   ],
 };
-
-/**
- * Normalize a free-text title for matching: lowercase, trim, collapse umlauts
- * and ß so 'Müsli' and 'Muesli' both hit. Keeps spaces for word matching.
- */
-function normalize(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss');
-}
 
 const NORMALIZED_KEYWORDS: { keyword: string; key: string }[] = Object.entries(KEYWORD_MAP)
   .flatMap(([key, words]) => words.map((w) => ({ keyword: normalize(w), key })))

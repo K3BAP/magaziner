@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useFinance } from '../../composables/useFinance';
+import { useExpenseFilter } from '../../composables/useExpenseFilter';
+import { formatCurrency } from '../../utils/currency';
+import ExpenseFilterBar from './ExpenseFilterBar.vue';
+import ExpenseFilterSheet from './ExpenseFilterSheet.vue';
 
 const { transactions, loading } = useFinance();
+const { results, resetFilters } = useExpenseFilter();
+
+const showFilterSheet = ref(false);
 
 const emit = defineEmits<{
   (e: 'edit-transaction', transaction: any): void
 }>();
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
-};
 
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
@@ -19,6 +23,10 @@ const formatDate = (dateStr: string) => {
 
 <template>
   <div class="h-full overflow-y-auto pb-24">
+    <!-- The v-if keeps the bar and the "no data at all" empty state disjoint, so
+         the latter keeps its full-height centering. -->
+    <ExpenseFilterBar v-if="transactions.length > 0" @open-filters="showFilterSheet = true" />
+
     <div v-if="loading && transactions.length === 0" class="flex justify-center p-10">
       <span class="loading loading-spinner loading-lg text-primary"></span>
     </div>
@@ -29,9 +37,18 @@ const formatDate = (dateStr: string) => {
       <p>Tippe auf +, um Ausgaben einzutragen.</p>
     </div>
 
+    <!-- Distinct from the state above: there *is* data, the filter just hides it.
+         py-16 instead of h-full because the bar already takes space up top. -->
+    <div v-else-if="results.length === 0" class="flex flex-col items-center gap-3 py-16 px-10 opacity-70 text-center">
+      <div class="text-5xl">🔍</div>
+      <h3 class="font-bold text-lg">Keine Treffer.</h3>
+      <p class="text-sm">Für diese Suche gibt es keine Einträge.</p>
+      <button class="btn btn-sm btn-outline" @click="resetFilters">Filter zurücksetzen</button>
+    </div>
+
     <div v-else class="divide-y divide-base-200">
-      <div 
-        v-for="trans in transactions" 
+      <div
+        v-for="trans in results"
         :key="trans.id" 
         @click="emit('edit-transaction', trans)"
         class="flex p-4 bg-base-100 hover:bg-base-50 transition-colors cursor-pointer justify-between items-center"
@@ -78,5 +95,7 @@ const formatDate = (dateStr: string) => {
 
       </div>
     </div>
+
+    <ExpenseFilterSheet v-if="showFilterSheet" @close="showFilterSheet = false" />
   </div>
 </template>
