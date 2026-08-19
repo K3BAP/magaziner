@@ -4,6 +4,7 @@ import { useActiveHousehold } from './useActiveHousehold';
 import { useShoppingLists } from './useShoppingLists';
 import { useShoppingCategories, type ShoppingCategory } from './useShoppingCategories';
 import { guessCategoryKey, MISC_CATEGORY_KEY } from '../utils/shoppingCategories';
+import { parseOfferPrefix, startOfDay, type OfferPrefix } from '../utils/offerDate';
 
 export interface ShoppingItem {
     id: string;
@@ -22,8 +23,43 @@ export interface ShoppingGroup {
     items: ShoppingItem[];
 }
 
+/** A parsed offer prefix plus whether that day is still ahead of us. */
+export interface ItemOffer extends OfferPrefix {
+    isFuture: boolean;
+}
+
+// Sentinel ids for the two synthetic offer buckets. Real groups carry a
+// category UUID, so these can't collide.
+const OFFER_NOW_ID = '__offer_now';
+const OFFER_SOON_ID = '__offer_soon';
+
 const items = ref<ShoppingItem[]>([]);
 const loading = ref(false);
+
+// "Today" has to be reactive: `groupedItems` is a computed, and a computed can't
+// re-run on wall-clock time. Without this, a PWA left open overnight would still
+// show yesterday's split into "bald" and "jetzt".
+const today = ref(startOfDay(new Date()));
+
+const refreshToday = () => {
+    const current = startOfDay(new Date());
+    if (current.getTime() !== today.value.getTime()) today.value = current;
+};
+
+// Registered once, at module scope — the app is re-opened far more often than
+// it is left running across midnight.
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) refreshToday();
+    });
+}
+
+/** The offer date in front of an entry's title, or `null` if there is none. */
+const offerFor = (item: ShoppingItem): ItemOffer | null => {
+    const parsed = parseOfferPrefix(item.title, today.value);
+    if (!parsed) return null;
+    return { ...parsed, isFuture: parsed.date.getTime() > today.value.getTime() };
+};
 
 export function useShoppingList() {
 
@@ -48,6 +84,7 @@ export function useShoppingList() {
 
             if (error) throw error;
             items.value = data || [];
+            refreshToday();
         } catch (error) {
             console.error('Fehler beim Laden der Einkaufsliste:', error);
         } finally {
@@ -65,7 +102,10 @@ export function useShoppingList() {
             return;
         }
 
-        const guessedCategoryId = categoryByKey(guessCategoryKey(trimmed))?.id ?? null;
+        // Categorize on the product alone — the leading offer date, if any, says
+        // nothing about the aisle.
+        const forCategory = parseOfferPrefix(trimmed)?.rest ?? trimmed;
+        const guessedCategoryId = categoryByKey(guessCategoryKey(forCategory))?.id ?? null;
 
         // Optimistic Update
         const tempId = crypto.randomUUID();
@@ -153,11 +193,38 @@ export function useShoppingList() {
     // Group items by aisle in category position order. Within a group: open
     // items first (newest first), completed sink to the bottom. A synthetic
     // "Sonstiges" bucket always catches uncategorized entries, even if the misc
-    // aisle row was deleted.
+    // aisle row was deleted. Entries carrying an offer date skip the aisles
+    // entirely and land in one of two synthetic buckets — "jetzt im Angebot"
+    // above everything, "bald im Angebot" below everything.
     const groupedItems = computed<ShoppingGroup[]>(() => {
         const sortWithin = (a: ShoppingItem, b: ShoppingItem) => {
             if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        };
+
+        // Split off the offer entries first; the aisles only ever see the rest.
+        // The `category_id` of an offer entry stays untouched in the DB, so it
+        // falls back into its aisle the moment the date is edited out again.
+        const nowItems: ShoppingItem[] = [];
+        const soonItems: ShoppingItem[] = [];
+        const plainItems: ShoppingItem[] = [];
+        const offerDay = new Map<string, number>();
+
+        for (const item of items.value) {
+            const offer = offerFor(item);
+            if (!offer) {
+                plainItems.push(item);
+                continue;
+            }
+            offerDay.set(item.id, offer.date.getTime());
+            (offer.isFuture ? soonItems : nowItems).push(item);
+        }
+
+        // Completed entries sink here too; among the open ones "bald" counts
+        // down to the next offer, "jetzt" leads with the freshest one.
+        const byOfferDay = (direction: 1 | -1) => (a: ShoppingItem, b: ShoppingItem) => {
+            if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+            return direction * ((offerDay.get(a.id) ?? 0) - (offerDay.get(b.id) ?? 0));
         };
 
         const ordered = [...categories.value].sort((a, b) => a.position - b.position);
@@ -165,7 +232,7 @@ export function useShoppingList() {
         let miscBucket: ShoppingGroup | null = null;
 
         for (const cat of ordered) {
-            const groupItems = items.value
+            const groupItems = plainItems
                 .filter(i => i.category_id === cat.id)
                 .sort(sortWithin);
             const group: ShoppingGroup = {
@@ -181,7 +248,7 @@ export function useShoppingList() {
         // Entries whose category was deleted (category_id no longer resolves) or
         // that were never categorized fall into the misc bucket.
         const knownIds = new Set(ordered.map((c: ShoppingCategory) => c.id));
-        const orphans = items.value
+        const orphans = plainItems
             .filter(i => !i.category_id || !knownIds.has(i.category_id))
             .sort(sortWithin);
 
@@ -190,6 +257,23 @@ export function useShoppingList() {
             if (miscBucket.items.length > 0) groups.push(miscBucket);
         } else if (orphans.length > 0) {
             groups.push({ id: null, name: 'Sonstiges', icon: '🛒', items: orphans });
+        }
+
+        if (nowItems.length > 0) {
+            groups.unshift({
+                id: OFFER_NOW_ID,
+                name: 'Jetzt im Angebot',
+                icon: '🔥',
+                items: nowItems.sort(byOfferDay(-1)),
+            });
+        }
+        if (soonItems.length > 0) {
+            groups.push({
+                id: OFFER_SOON_ID,
+                name: 'Bald im Angebot',
+                icon: '🗓️',
+                items: soonItems.sort(byOfferDay(1)),
+            });
         }
 
         return groups;
@@ -205,6 +289,8 @@ export function useShoppingList() {
     return {
         items,
         loading,
+        today,
+        offerFor,
         groupedItems,
         completedCount,
         fetchItems,

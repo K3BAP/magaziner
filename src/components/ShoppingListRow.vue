@@ -5,7 +5,7 @@ import { useShoppingCategories } from '../composables/useShoppingCategories';
 import { TagIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps<{ item: ShoppingItem }>();
-const { toggleItem, setItemCategory } = useShoppingList();
+const { toggleItem, setItemCategory, offerFor } = useShoppingList();
 const { categories } = useShoppingCategories();
 
 // Bottom-sheet picker instead of a CSS dropdown: a fixed-position modal isn't
@@ -15,6 +15,10 @@ const showPicker = ref(false);
 const currentCategory = computed(
   () => categories.value.find((c) => c.id === props.item.category_id) ?? null,
 );
+
+// A leading offer date ("Fr. 21.08. Kesselchips") is rendered on its own: red
+// once the offer is running, and until then the whole row is greyed out.
+const offer = computed(() => offerFor(props.item));
 
 const pick = (categoryId: string) => {
   setItemCategory(props.item, categoryId);
@@ -35,9 +39,12 @@ const pick = (categoryId: string) => {
 
       <span
         class="font-medium text-lg transition-all truncate"
-        :class="{ 'line-through text-gray-400': item.is_completed }"
+        :class="item.is_completed
+          ? 'line-through text-gray-400'
+          : (offer?.isFuture ? 'text-base-content/40' : '')"
       >
-        {{ item.title }}
+        <template v-if="offer"><span :class="!item.is_completed && !offer.isFuture ? 'text-error font-semibold' : ''">{{ offer.label }}</span> {{ offer.rest }}</template>
+        <template v-else>{{ item.title }}</template>
       </span>
     </div>
 

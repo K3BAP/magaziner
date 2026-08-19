@@ -25,6 +25,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.8.0',
+    date: '2026-08-19',
+    title: 'Angebote im Blick',
+    items: [
+      'Stellst du einem Eintrag ein Datum voran („21.08. Räucherlachs“ oder „Fr. 21.08. Kesselchips“), erkennt die Einkaufsliste das jetzt automatisch.',
+      'Angebote, die erst noch kommen, stehen ausgegraut ganz unten unter „Bald im Angebot“.',
+      'Ab dem Angebotstag rutscht der Eintrag nach ganz oben unter „Jetzt im Angebot“ und das Datum wird rot.',
+      'Ein Datum ohne Jahr wird als das nächste Vorkommen gelesen — „05.01.“ im Dezember meint also den Januar danach.',
+    ],
+  },
+  {
     version: '0.7.0',
     date: '2026-08-07',
     title: 'Ausgaben durchsuchen',
