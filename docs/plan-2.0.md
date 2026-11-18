@@ -117,3 +117,28 @@ kleinen Changelog-Einträgen.
 2. **Markenfarbe und Schrift:** eigener Vorschlag in M3, oder gibt es Vorgaben?
 3. **Finanz-Personen an Konten koppeln (M6.1):** Das ist eine Schema-Änderung auf Produktionsdaten und braucht eine Migration der bestehenden Namen.
 4. **Reihenfolge:** M4 (Realtime) vor M3 ziehen, wenn das gemeinsame Einkaufen der größte Schmerz ist?
+
+---
+
+## Stand der Umsetzung (Branch `2.0`)
+
+Entscheidungen vom 18.11.2026: Tab-Leiste *Übersicht · Vorräte · Einkauf · Finanzen · Mehr*,
+eigener Farbvorschlag (Petrol/Amber, Figtree), Finanz-Personen **nicht** an Konten koppeln,
+additive Migrationen direkt anwenden.
+
+| Meilenstein | Status | Abweichungen |
+|---|---|---|
+| M1 Fundament | ✅ | – |
+| M2 App-Shell | ✅ | – |
+| M3 Design | ✅ | – |
+| M4 Einkauf & Aufgaben | ✅ | Zielliste der Mindestbestand-Automatik = erste Liste (per Drag & Drop festlegbar) statt eigener Einstellung |
+| M5 Vorräte & Scanner | ✅ | – |
+| M6 Finanzen, Rezepte, Release | ✅ | M6.1 entfällt (Entscheidung). Stattdessen schlägt das Onboarding Namen der Haushaltsmitglieder vor, ohne Schemaänderung |
+
+Angewandte Migrationen: siehe `scripts/migrations/README.md`.
+
+Offen / manuell:
+- Schutz vor geleakten Passwörtern in Supabase Auth einschalten (Dashboard → Authentication →
+  Passwort-Sicherheit). Das lässt sich nicht per MCP setzen.
+- Die drei `SECURITY DEFINER`-Hinweise der Advisors sind gewollt (Einladung annehmen, Konto
+  löschen, Inhaberschaft übertragen).
