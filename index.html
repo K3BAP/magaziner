@@ -5,13 +5,20 @@
     
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
-    <meta name="theme-color" content="#ffffff">
-    <!-- `interactive-widget=overlays-content` keeps the software keyboard on top
+    <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#181c1b" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Magaziner">
+    <!-- Zoom is allowed again (accessibility). Inputs use ≥16px on iOS (style.css),
+         so focusing a field no longer auto-zooms.
+         `interactive-widget=overlays-content` keeps the software keyboard on top
          of the page instead of letting it resize the layout viewport — without
          this, fixed-position panels like the finance wizards get scrolled off
          screen when an input focuses on mobile. Chrome 108+ / Safari 16.4+. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content" />
-    <title>Mein Haushalt</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
+    <title>Mein Magaziner</title>
+    <meta name="description" content="Vorräte, Einkaufslisten, Aufgaben und Finanzen für deinen Haushalt.">
   </head>
   <body>
     <div id="app"></div>

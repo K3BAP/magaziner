@@ -17,12 +17,26 @@ import {
   CheckIcon,
   ExclamationTriangleIcon,
   TrashIcon,
+  ComputerDesktopIcon,
+  SparklesIcon,
+  InformationCircleIcon,
 } from '@heroicons/vue/24/outline';
+import { useChangelog, CURRENT_VERSION } from '../composables/useChangelog';
+import { confirmDialog } from '../composables/useConfirm';
+import { toast } from '../composables/useToast';
+import { authErrorMessage } from '../utils/authErrors';
 
 const router = useRouter();
 const { user, signOut, updatePassword, deleteAccount } = useAuth();
 const { profile, updateProfile } = useProfile();
-const { theme, toggle: toggleTheme } = useTheme();
+const { mode: themeMode, setMode: setThemeMode } = useTheme();
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Hell', icon: SunIcon },
+  { value: 'dark', label: 'Dunkel', icon: MoonIcon },
+  { value: 'system', label: 'System', icon: ComputerDesktopIcon },
+] as const;
+const { openAll: openChangelog } = useChangelog();
+const appVersion = CURRENT_VERSION;
 
 // --- Profile (display name) ---
 const displayName = ref(profile.value?.display_name ?? '');
@@ -46,6 +60,7 @@ const onSaveProfile = async () => {
   try {
     await updateProfile({ display_name: name });
     profileSaved.value = true;
+    toast.success('Profil gespeichert');
     setTimeout(() => { profileSaved.value = false; }, 1500);
   } finally {
     savingProfile.value = false;
@@ -74,12 +89,13 @@ const onChangePassword = async () => {
   try {
     await updatePassword(newPwd.value);
     pwdSaved.value = true;
+    toast.success('Passwort geändert');
     newPwd.value = '';
     confirmPwd.value = '';
     showPwd.value = false;
     setTimeout(() => { pwdSaved.value = false; }, 2000);
   } catch (e: any) {
-    pwdError.value = e?.message ?? 'Konnte Passwort nicht ändern.';
+    pwdError.value = authErrorMessage(e);
   } finally {
     pwdSaving.value = false;
   }
@@ -87,6 +103,7 @@ const onChangePassword = async () => {
 
 // --- Logout ---
 const onSignOut = async () => {
+  if (!(await confirmDialog({ title: 'Abmelden?', confirmLabel: 'Abmelden' }))) return;
   await signOut();
   router.push({ name: 'login' });
 };
@@ -136,11 +153,10 @@ const onDeleteAccount = async () => {
 
 <template>
   <div class="flex flex-col gap-6 pb-10">
-    <h1 class="text-2xl font-bold">Einstellungen</h1>
 
     <!-- Profil -->
-    <section class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-5">
+    <section class="surface">
+      <div class="p-5">
         <div class="flex items-center gap-2 mb-4">
           <UserIcon class="h-5 w-5 text-primary" />
           <h2 class="text-sm uppercase tracking-wider font-semibold text-base-content/60">Profil</h2>
@@ -156,7 +172,7 @@ const onDeleteAccount = async () => {
             <input
               v-model="displayName"
               type="text"
-              class="input input-bordered w-full"
+              class="input w-full"
               :disabled="savingProfile"
               @keyup.enter="onSaveProfile"
             />
@@ -177,8 +193,8 @@ const onDeleteAccount = async () => {
     </section>
 
     <!-- Haushalte -->
-    <section class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-5">
+    <section class="surface">
+      <div class="p-5">
         <div class="flex items-center gap-2 mb-4">
           <HomeIcon class="h-5 w-5 text-primary" />
           <h2 class="text-sm uppercase tracking-wider font-semibold text-base-content/60">Haushalte</h2>
@@ -188,36 +204,34 @@ const onDeleteAccount = async () => {
     </section>
 
     <!-- Darstellung -->
-    <section class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-5">
+    <section class="surface">
+      <div class="p-5">
         <div class="flex items-center gap-2 mb-4">
           <PaintBrushIcon class="h-5 w-5 text-primary" />
           <h2 class="text-sm uppercase tracking-wider font-semibold text-base-content/60">Darstellung</h2>
         </div>
 
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <div class="font-semibold">Design</div>
-            <div class="text-xs text-base-content/60">
-              {{ theme === 'dark' ? 'Dunkler Modus aktiv' : 'Heller Modus aktiv' }}
-            </div>
-          </div>
+        <div role="radiogroup" aria-label="Design" class="grid grid-cols-3 gap-2">
           <button
+            v-for="o in THEME_OPTIONS"
+            :key="o.value"
             type="button"
-            class="btn btn-ghost btn-circle"
-            @click="toggleTheme"
-            :title="theme === 'dark' ? 'Helles Design' : 'Dunkles Design'"
+            role="radio"
+            :aria-checked="themeMode === o.value"
+            class="pressable flex flex-col items-center gap-1.5 rounded-2xl py-3 text-sm font-semibold border-2 transition-colors"
+            :class="themeMode === o.value ? 'border-primary bg-primary/8 text-primary' : 'border-transparent bg-base-200 text-base-content/70'"
+            @click="setThemeMode(o.value)"
           >
-            <SunIcon v-if="theme === 'dark'" class="h-5 w-5" />
-            <MoonIcon v-else class="h-5 w-5" />
+            <component :is="o.icon" class="h-6 w-6" />
+            {{ o.label }}
           </button>
         </div>
       </div>
     </section>
 
     <!-- Konto -->
-    <section class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-5">
+    <section class="surface">
+      <div class="p-5">
         <div class="flex items-center gap-2 mb-4">
           <KeyIcon class="h-5 w-5 text-primary" />
           <h2 class="text-sm uppercase tracking-wider font-semibold text-base-content/60">Konto</h2>
@@ -240,7 +254,7 @@ const onDeleteAccount = async () => {
               v-model="newPwd"
               type="password"
               placeholder="Neues Passwort"
-              class="input input-bordered input-sm w-full"
+              class="input input-sm w-full"
               :disabled="pwdSaving"
               autocomplete="new-password"
             />
@@ -248,7 +262,7 @@ const onDeleteAccount = async () => {
               v-model="confirmPwd"
               type="password"
               placeholder="Passwort bestätigen"
-              class="input input-bordered input-sm w-full"
+              class="input input-sm w-full"
               :disabled="pwdSaving"
               autocomplete="new-password"
             />
@@ -354,7 +368,7 @@ const onDeleteAccount = async () => {
                   v-model="deleteEmailInput"
                   type="email"
                   autocomplete="off"
-                  class="input input-bordered input-sm w-full"
+                  class="input input-sm w-full"
                   :disabled="deleting"
                   :placeholder="user?.email ?? 'E-Mail'"
                   @keyup.enter="onDeleteAccount"
@@ -383,6 +397,25 @@ const onDeleteAccount = async () => {
               </template>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Über -->
+    <section class="surface">
+      <div class="p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2">
+          <InformationCircleIcon class="h-5 w-5 text-primary" />
+          <h2 class="text-sm uppercase tracking-wider font-semibold text-base-content/60">Über Magaziner</h2>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="font-semibold">Version {{ appVersion }}</div>
+            <div class="text-xs text-base-content/60">Updates kommen automatisch.</div>
+          </div>
+          <button type="button" class="btn btn-sm bg-base-200 border-0 gap-1" @click="openChangelog">
+            <SparklesIcon class="h-4 w-4" /> Neuigkeiten
+          </button>
         </div>
       </div>
     </section>

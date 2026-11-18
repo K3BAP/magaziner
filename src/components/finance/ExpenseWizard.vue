@@ -2,6 +2,9 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import { useFinance } from '../../composables/useFinance';
 import { useExpenseSplits } from '../../composables/useExpenseSplits';
+import { todayLocalISO } from '../../utils/date';
+import { normalize } from '../../utils/text';
+import { TrashIcon } from '@heroicons/vue/24/outline';
 import {
   ArrowLeftIcon,
   XMarkIcon,
@@ -10,15 +13,18 @@ import {
   PencilSquareIcon,
 } from '@heroicons/vue/24/outline';
 
-const props = defineProps<{ open: boolean }>();
+/** With `transaction` the wizard edits that expense instead of creating one. */
+const props = defineProps<{ open: boolean; transaction?: any | null }>();
 const emit = defineEmits<{
   close: [];
   saved: [];
   'edit-categories': [];
   'add-member': [];
+  delete: [];
 }>();
 
-const { members, categories, transactions, addTransaction } = useFinance();
+const { members, categories, transactions, addTransaction, updateTransaction } = useFinance();
+const isEdit = computed(() => !!props.transaction);
 
 // -- Step state --
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -44,14 +50,14 @@ const titleSuggestions = computed(() => {
     if (t.type !== 'expense') continue;
     const label = t.title?.trim();
     if (!label) continue;
-    const key = label.toLowerCase();
+    const key = normalize(label);
     const entry = counts.get(key);
     if (entry) entry.n++;
     else counts.set(key, { label, n: 1 });
   }
-  const q = title.value.trim().toLowerCase();
+  const q = normalize(title.value);
   return [...counts.values()]
-    .filter((e) => e.label.toLowerCase() !== q && (!q || e.label.toLowerCase().includes(q)))
+    .filter((e) => normalize(e.label) !== q && (!q || normalize(e.label).includes(q)))
     .sort((a, b) => b.n - a.n)
     .slice(0, 5)
     .map((e) => e.label);
@@ -59,13 +65,14 @@ const titleSuggestions = computed(() => {
 
 const categoryId = ref<string>(''); // '' === keine
 const payerId = ref<string>('');
-const date = ref(new Date().toISOString().split('T')[0]);
+const date = ref(todayLocalISO());
 
 // Split math (init, redistribute, normalise) lives in a shared composable so
 // the edit modal in FinanceView and this wizard stay in lockstep.
 const {
   splits,
   initEqual: initSplits,
+  hydrateFrom,
   onFieldEdit: handleSplitChange,
   onActiveToggle: handleActiveChange,
   finaliseForSave: finaliseSplits,
@@ -79,12 +86,38 @@ const reset = () => {
   title.value = '';
   categoryId.value = '';
   payerId.value = '';
-  date.value = new Date().toISOString().split('T')[0];
+  date.value = todayLocalISO();
   splits.value = [];
   saving.value = false;
   justSaved.value = false;
   errorMsg.value = null;
+
+  const t = props.transaction;
+  if (t) {
+    amountInput.value = Number(t.amount).toFixed(2).replace('.', ',');
+    title.value = t.title ?? '';
+    categoryId.value = t.category_id ?? '';
+    payerId.value = t.payer_id ?? '';
+    date.value = t.date;
+    hydrateFrom(t.splits);
+  }
 };
+
+/** Edit mode: jump straight to any step. */
+const jumpTo = (s: Step) => {
+  if (!isEdit.value || saving.value) return;
+  direction.value = s > step.value ? 'forward' : 'back';
+  step.value = s;
+};
+
+const allValid = computed(() => {
+  if (!(Number.isFinite(amount.value) && amount.value > 0)) return false;
+  if (!title.value.trim() || !payerId.value) return false;
+  const active = splits.value.filter((x) => x.active);
+  if (active.length === 0) return false;
+  const sum = active.reduce((acc, x) => acc + Number(x.amount || 0), 0);
+  return Math.abs(sum - amount.value) < 0.05;
+});
 
 // Autofocus management — Vue's :ref isn't enough on dynamic v-if blocks here.
 const amountInputEl = ref<HTMLInputElement | null>(null);
@@ -202,21 +235,34 @@ const justSaved = ref(false);
 const errorMsg = ref<string | null>(null);
 
 const save = async () => {
-  if (!canAdvance.value || saving.value || justSaved.value) return;
+  if (saving.value || justSaved.value) return;
+  if (isEdit.value ? !allValid.value : !canAdvance.value) return;
   saving.value = true;
   errorMsg.value = null;
   try {
     const finalSplits = finaliseSplits();
-    const result = await addTransaction(
-      'expense',
-      amount.value,
-      payerId.value,
-      date.value,
-      title.value.trim(),
-      undefined,
-      categoryId.value || undefined,
-      finalSplits
-    );
+    const result = isEdit.value
+      ? await updateTransaction(
+          props.transaction.id,
+          'expense',
+          amount.value,
+          payerId.value,
+          date.value,
+          title.value.trim(),
+          undefined,
+          categoryId.value || undefined,
+          finalSplits
+        )
+      : await addTransaction(
+          'expense',
+          amount.value,
+          payerId.value,
+          date.value,
+          title.value.trim(),
+          undefined,
+          categoryId.value || undefined,
+          finalSplits
+        );
     if (!result) throw new Error('Speichern fehlgeschlagen.');
     saving.value = false;
     justSaved.value = true;
@@ -241,7 +287,7 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
       aria-modal="true"
     >
       <!-- Header -->
-      <header class="flex items-center gap-2 px-3 py-3 border-b border-base-300 shrink-0">
+      <header class="wizard-header flex items-center gap-2 px-3 py-3 border-b border-base-300 shrink-0">
         <button
           type="button"
           class="btn btn-ghost btn-circle btn-sm"
@@ -252,11 +298,21 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
           <ArrowLeftIcon class="h-5 w-5" />
         </button>
         <div class="flex-1 min-w-0">
-          <h1 class="font-bold text-base leading-tight truncate">Neue Ausgabe</h1>
+          <h1 class="font-bold text-base leading-tight truncate">{{ isEdit ? 'Ausgabe bearbeiten' : 'Neue Ausgabe' }}</h1>
           <p class="text-xs text-base-content/60">
             Schritt {{ step }} von 5 · {{ stepLabels[step - 1] }}
           </p>
         </div>
+        <button
+          v-if="isEdit"
+          type="button"
+          class="btn btn-ghost btn-circle btn-sm text-error"
+          :disabled="saving"
+          aria-label="Ausgabe löschen"
+          @click="emit('delete')"
+        >
+          <TrashIcon class="h-5 w-5" />
+        </button>
         <button
           type="button"
           class="btn btn-ghost btn-circle btn-sm"
@@ -274,7 +330,8 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
           v-for="(label, i) in stepLabels"
           :key="label"
           class="step"
-          :class="{ 'step-primary': step >= (i + 1) }"
+          :class="{ 'step-primary': step >= (i + 1), 'cursor-pointer': isEdit }"
+          @click="jumpTo((i + 1) as Step)"
         >
           {{ label }}
         </li>
@@ -462,10 +519,19 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
       </section>
 
       <!-- Footer -->
-      <footer class="px-4 py-3 border-t border-base-300 shrink-0">
+      <footer class="px-4 py-3 border-t border-base-300 shrink-0 flex gap-2 wizard-footer">
+        <button
+          v-if="isEdit && step < 5"
+          type="button"
+          class="btn btn-lg btn-ghost flex-1"
+          :disabled="!allValid || saving || justSaved"
+          @click="save"
+        >
+          Speichern
+        </button>
         <button
           type="button"
-          class="btn btn-block btn-lg gap-2"
+          class="btn btn-lg gap-2 flex-1"
           :class="justSaved ? 'btn-success' : 'btn-primary'"
           :disabled="!canAdvance || saving || justSaved"
           @click="goNext"
@@ -493,6 +559,13 @@ const stepLabels = ['Betrag', 'Titel', 'Kategorie', 'Bezahlt von', 'Aufteilung']
 </template>
 
 <style scoped>
+.wizard-header {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+.wizard-footer {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
 /* --- Wizard entrance/exit: slide up from the bottom edge of the viewport. */
 .wizard-enter-active,
 .wizard-leave-active {

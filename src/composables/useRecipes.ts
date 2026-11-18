@@ -15,6 +15,7 @@ export interface Recipe {
     image_url: string | null;
     description: string | null;
     ingredients: Ingredient[];
+    servings?: number | null;
     created_at?: string;
 }
 
@@ -126,7 +127,19 @@ export function useRecipes() {
         }
     };
 
+    /** Upload a (pre-processed) photo into the household's folder; returns its public URL. */
+    const uploadRecipeImage = async (recipeId: string, blob: Blob): Promise<string> => {
+        if (!activeHouseholdId.value) throw new Error('Kein aktiver Haushalt');
+        const path = `${activeHouseholdId.value}/${recipeId}-${Date.now()}.jpg`;
+        const { error } = await supabase.storage
+            .from('recipe-images')
+            .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+        if (error) throw error;
+        return supabase.storage.from('recipe-images').getPublicUrl(path).data.publicUrl;
+    };
+
     return {
+        uploadRecipeImage,
         recipes,
         loading,
         fetchRecipes,

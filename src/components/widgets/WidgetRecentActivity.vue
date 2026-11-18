@@ -67,7 +67,7 @@ const relativeTime = (iso: string) => {
     <ul v-else class="flex flex-col -my-1">
       <li v-for="e in shown" :key="e.id" class="flex items-center gap-3 py-1.5">
         <span class="relative shrink-0">
-          <UserAvatar :name="actorName(e.actor_id)" :src="memberById(e.actor_id)?.avatar_url" size="sm" />
+          <UserAvatar :name="memberById(e.actor_id)?.display_name ?? actorName(e.actor_id)" :src="memberById(e.actor_id)?.avatar_url" size="sm" />
           <span class="absolute -bottom-1 -right-1 text-[11px]" aria-hidden="true">{{ EMOJI[e.kind] }}</span>
         </span>
         <div class="flex-1 min-w-0 text-sm leading-snug">

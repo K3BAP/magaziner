@@ -1,99 +1,97 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useFinance } from '../../composables/useFinance';
 import { useExpenseFilter } from '../../composables/useExpenseFilter';
 import { formatCurrency } from '../../utils/currency';
+import { parseLocalDate, relativeDayLabel } from '../../utils/date';
 import ExpenseFilterBar from './ExpenseFilterBar.vue';
 import ExpenseFilterSheet from './ExpenseFilterSheet.vue';
+import EmptyState from '../ui/EmptyState.vue';
+import Skeleton from '../ui/Skeleton.vue';
+import { ArrowsRightLeftIcon, ShoppingBagIcon } from '@heroicons/vue/24/outline';
 
 const { transactions, loading } = useFinance();
 const { results, resetFilters } = useExpenseFilter();
 
 const showFilterSheet = ref(false);
 
-const emit = defineEmits<{
-  (e: 'edit-transaction', transaction: any): void
-}>();
+const emit = defineEmits<{ (e: 'edit-transaction', transaction: any): void }>();
 
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
+/** Results grouped by month, keeping the filter's sort order inside. */
+const months = computed(() => {
+  const groups: { key: string; label: string; total: number; items: any[] }[] = [];
+  for (const t of results.value as any[]) {
+    const key = t.date.slice(0, 7);
+    let g = groups.find((x) => x.key === key);
+    if (!g) {
+      const label = parseLocalDate(`${key}-01`).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+      g = { key, label, total: 0, items: [] };
+      groups.push(g);
+    }
+    g.items.push(t);
+    if (t.type === 'expense') g.total += Number(t.amount);
+  }
+  return groups;
+});
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto pb-24">
-    <!-- The v-if keeps the bar and the "no data at all" empty state disjoint, so
-         the latter keeps its full-height centering. -->
+  <div>
     <ExpenseFilterBar v-if="transactions.length > 0" @open-filters="showFilterSheet = true" />
 
-    <div v-if="loading && transactions.length === 0" class="flex justify-center p-10">
-      <span class="loading loading-spinner loading-lg text-primary"></span>
-    </div>
+    <Skeleton v-if="loading && transactions.length === 0" :rows="6" height="4rem" />
 
-    <div v-else-if="transactions.length === 0" class="flex flex-col items-center justify-center h-full p-10 opacity-50 text-center">
-      <div class="text-6xl mb-4">💸</div>
-      <h3 class="font-bold text-lg">Keine Ausgaben</h3>
-      <p>Tippe auf +, um Ausgaben einzutragen.</p>
-    </div>
+    <EmptyState
+      v-else-if="transactions.length === 0"
+      icon="💸"
+      title="Noch keine Buchungen"
+      text="Tippe unten rechts auf „Buchen“, um die erste Ausgabe oder Zahlung einzutragen."
+    />
 
-    <!-- Distinct from the state above: there *is* data, the filter just hides it.
-         py-16 instead of h-full because the bar already takes space up top. -->
-    <div v-else-if="results.length === 0" class="flex flex-col items-center gap-3 py-16 px-10 opacity-70 text-center">
-      <div class="text-5xl">🔍</div>
-      <h3 class="font-bold text-lg">Keine Treffer.</h3>
-      <p class="text-sm">Für diese Suche gibt es keine Einträge.</p>
-      <button class="btn btn-sm btn-outline" @click="resetFilters">Filter zurücksetzen</button>
-    </div>
+    <EmptyState v-else-if="results.length === 0" compact icon="🔍" title="Keine Treffer" text="Für diese Suche gibt es keine Einträge.">
+      <button class="btn btn-sm btn-ghost" @click="resetFilters">Filter zurücksetzen</button>
+    </EmptyState>
 
-    <div v-else class="divide-y divide-base-200">
-      <div
-        v-for="trans in results"
-        :key="trans.id" 
-        @click="emit('edit-transaction', trans)"
-        class="flex p-4 bg-base-100 hover:bg-base-50 transition-colors cursor-pointer justify-between items-center"
-      >
-        <!-- Left: Icon & Info -->
-        <div class="flex items-center gap-3">
-           <div 
-             class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-             :class="trans.type === 'expense' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'"
-           >
-              <!-- Expense Icon -->
-              <svg v-if="trans.type === 'expense'" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-              <!-- Payment Icon -->
-              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-           </div>
-           
-           <div>
-              <div class="font-bold text-sm">
-                <!-- Title for Expense, or "Payment" -->
+    <div v-else class="flex flex-col gap-5">
+      <section v-for="m in months" :key="m.key">
+        <div class="flex items-baseline justify-between px-1 mb-2">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-base-content/55">{{ m.label }}</h3>
+          <span v-if="m.total" class="text-xs font-semibold text-base-content/55 tabular-nums">{{ formatCurrency(m.total) }}</span>
+        </div>
+        <div class="surface overflow-hidden divide-y divide-base-200">
+          <button
+            v-for="trans in m.items"
+            :key="trans.id"
+            type="button"
+            class="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-base-200 transition-colors"
+            @click="emit('edit-transaction', trans)"
+          >
+            <span
+              class="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 text-lg"
+              :class="trans.type === 'expense' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'"
+            >
+              <template v-if="trans.type === 'expense'">
+                <span v-if="trans.category?.icon">{{ trans.category.icon }}</span>
+                <ShoppingBagIcon v-else class="h-5 w-5" />
+              </template>
+              <ArrowsRightLeftIcon v-else class="h-5 w-5" />
+            </span>
+            <span class="flex-1 min-w-0">
+              <span class="block font-semibold truncate">
                 {{ trans.type === 'expense' ? trans.title || 'Ausgabe' : 'Zahlung' }}
-                <span v-if="trans.type === 'expense' && trans.category" class="ml-1">{{ trans.category.icon }}</span>
-              </div>
-              <div class="text-xs text-gray-500">
-                 <span class="font-medium text-gray-700">{{ trans.payer?.name ?? '?' }}</span>
-                 
-                 <span v-if="trans.type === 'expense'"> bezahlte {{ formatCurrency(trans.amount) }}</span>
-                 <span v-else> an <span class="font-medium text-gray-700">{{ trans.receiver?.name ?? '?' }}</span></span>
-              </div>
-           </div>
+              </span>
+              <span class="block text-xs text-base-content/55 truncate">
+                <template v-if="trans.type === 'expense'">{{ trans.payer?.name ?? '?' }} hat bezahlt</template>
+                <template v-else>{{ trans.payer?.name ?? '?' }} → {{ trans.receiver?.name ?? '?' }}</template>
+                · {{ relativeDayLabel(trans.date) }}
+              </span>
+            </span>
+            <span class="font-semibold tabular-nums shrink-0" :class="trans.type === 'payment' ? 'text-success' : ''">
+              {{ formatCurrency(trans.amount) }}
+            </span>
+          </button>
         </div>
-
-        <!-- Right: Amount & Date -->
-        <div class="text-right">
-           <div 
-             class="font-bold"
-             :class="trans.type === 'payment' ? 'text-success' : 'text-base-content'"
-           >
-             {{ trans.type === 'payment' ? '→' : '' }} {{ formatCurrency(trans.amount) }}
-           </div>
-           <div class="text-xs text-gray-400">
-             {{ formatDate(trans.date) }}
-           </div>
-        </div>
-
-      </div>
+      </section>
     </div>
 
     <ExpenseFilterSheet v-if="showFilterSheet" @close="showFilterSheet = false" />

@@ -1,6 +1,8 @@
 import { ref, computed } from 'vue';
 import { changelog, CURRENT_VERSION, type ChangelogEntry } from '../changelog';
 
+export { CURRENT_VERSION };
+
 const STORAGE_KEY = 'magaziner:lastSeenChangelogVersion';
 
 /**
@@ -50,6 +52,13 @@ const unseenEntries = computed<ChangelogEntry[]>(() => {
 
 const hasUnseen = computed(() => unseenEntries.value.length > 0);
 
+// Opened by hand from the settings („Neuigkeiten“).
+const manualOpen = ref(false);
+const isOpen = computed(() => hasUnseen.value || manualOpen.value);
+const visibleEntries = computed<ChangelogEntry[]>(() =>
+  hasUnseen.value ? unseenEntries.value : changelog.slice(0, 6),
+);
+
 export function useChangelog() {
   /**
    * Call once on app boot. If this is a brand-new install, silently records
@@ -74,9 +83,17 @@ export function useChangelog() {
       /* ignore */
     }
     lastSeenVersion.value = CURRENT_VERSION;
+    manualOpen.value = false;
+  };
+
+  const openAll = () => {
+    manualOpen.value = true;
   };
 
   return {
+    isOpen,
+    visibleEntries,
+    openAll,
     currentVersion: CURRENT_VERSION,
     lastSeenVersion,
     unseenEntries,

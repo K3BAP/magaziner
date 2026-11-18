@@ -70,15 +70,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-base-200 p-4">
-    <div class="card w-full max-w-md shadow-2xl bg-base-100">
-      <div class="card-body items-center text-center gap-4">
+  <div class="min-h-dvh flex items-center justify-center bg-base-200 p-4">
+    <div class="surface w-full max-w-md">
+      <div class="p-6 flex flex-col items-center text-center gap-4">
         <!-- Unauthenticated: prompt to log in first -->
         <template v-if="phase === 'unauthenticated'">
           <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <HomeIcon class="h-7 w-7 text-primary" />
           </div>
-          <h2 class="text-xl font-bold">Haushalt beitreten</h2>
+          <h2 class="font-display text-2xl">Haushalt beitreten</h2>
           <p class="text-sm text-base-content/70">
             Du wurdest eingeladen, einem Haushalt beizutreten.
             Melde dich an oder erstelle ein Konto, um fortzufahren.
@@ -100,7 +100,7 @@ onMounted(() => {
           <div class="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center">
             <CheckCircleIcon class="h-7 w-7 text-success" />
           </div>
-          <h2 class="text-xl font-bold">Beigetreten!</h2>
+          <h2 class="font-display text-2xl">Beigetreten!</h2>
           <p class="text-sm text-base-content/70">
             Du bist jetzt Mitglied von
             <strong>„{{ joinedHouseholdName() }}"</strong>.
@@ -117,7 +117,7 @@ onMounted(() => {
           <div class="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center">
             <ExclamationTriangleIcon class="h-7 w-7 text-error" />
           </div>
-          <h2 class="text-xl font-bold">Einladung ungültig</h2>
+          <h2 class="font-display text-2xl">Einladung ungültig</h2>
           <p class="text-sm text-error">{{ errorMsg }}</p>
           <button class="btn btn-outline w-full" @click="goToDashboard">
             Zum Dashboard

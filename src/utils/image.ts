@@ -101,3 +101,25 @@ export async function processProfileImageCentered(
     bitmap.close();
   }
 }
+
+/**
+ * Downscale a photo for a recipe (longest edge ≤ 1600 px) and JPEG-encode it.
+ * Keeps the aspect ratio; honours EXIF orientation.
+ */
+export async function encodeRecipeImage(file: File, maxEdge = 1600, quality = 0.82): Promise<Blob> {
+  const bitmap = await loadImageBitmap(file);
+  try {
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Bild-Konvertierung fehlgeschlagen.');
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    return await canvasToBlob(canvas, 'image/jpeg', quality);
+  } finally {
+    bitmap.close();
+  }
+}

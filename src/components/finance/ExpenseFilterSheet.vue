@@ -7,7 +7,7 @@ import {
   type PersonRole,
   type SortKey,
 } from '../../composables/useExpenseFilter';
-import { XMarkIcon } from '@heroicons/vue/24/outline';
+import BottomSheet from '../ui/BottomSheet.vue';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
 
@@ -50,22 +50,7 @@ const SORTS: { value: SortKey; label: string }[] = [
 </script>
 
 <template>
-  <!--
-    Teleported because the finance panes live inside `overflow-hidden` +
-    `overflow-x-auto snap-x` containers that would clip anything positioned
-    inside them. `.modal-box` also picks up the on-screen-keyboard lift from
-    src/style.css, so the date and amount fields need no extra handling.
-  -->
-  <Teleport to="body">
-    <div class="modal modal-open modal-bottom sm:modal-middle" @click.self="emit('close')">
-      <div class="modal-box">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-bold text-lg">Filter</h3>
-          <button class="btn btn-sm btn-ghost btn-circle" @click="emit('close')">
-            <XMarkIcon class="h-5 w-5" />
-          </button>
-        </div>
-
+  <BottomSheet :open="true" title="Filter" @close="emit('close')">
         <!-- Typ -->
         <div class="mb-4">
           <div class="text-xs font-semibold text-base-content/70 mb-1.5">Typ</div>
@@ -179,7 +164,7 @@ const SORTS: { value: SortKey; label: string }[] = [
               <input
                 v-model="dateFrom"
                 type="date"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full"
                 @change="markCustomRange"
               />
             </label>
@@ -188,7 +173,7 @@ const SORTS: { value: SortKey; label: string }[] = [
               <input
                 v-model="dateTo"
                 type="date"
-                class="input input-bordered input-sm w-full"
+                class="input input-sm w-full"
                 @change="markCustomRange"
               />
             </label>
@@ -204,7 +189,7 @@ const SORTS: { value: SortKey; label: string }[] = [
               type="text"
               inputmode="decimal"
               placeholder="min"
-              class="input input-bordered input-sm flex-1"
+              class="input input-sm flex-1"
             />
             <span class="text-base-content/50">–</span>
             <input
@@ -212,7 +197,7 @@ const SORTS: { value: SortKey; label: string }[] = [
               type="text"
               inputmode="decimal"
               placeholder="max"
-              class="input input-bordered input-sm flex-1"
+              class="input input-sm flex-1"
             />
           </div>
         </div>
@@ -242,13 +227,11 @@ const SORTS: { value: SortKey; label: string }[] = [
           </div>
         </div>
 
-        <div class="modal-action justify-between">
-          <button class="btn btn-ghost text-error" @click="resetFilters">Zurücksetzen</button>
-          <button class="btn btn-primary" @click="emit('close')">
-            Fertig · {{ resultCount }} Treffer
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+    <template #footer>
+      <button class="btn btn-ghost text-error mr-auto" @click="resetFilters">Zurücksetzen</button>
+      <button class="btn btn-primary" @click="emit('close')">
+        Fertig · {{ resultCount }} Treffer
+      </button>
+    </template>
+  </BottomSheet>
 </template>

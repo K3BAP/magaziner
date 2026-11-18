@@ -2,6 +2,9 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
+import { toast } from '../composables/useToast';
+import { authErrorMessage } from '../utils/authErrors';
+import AuthLayout from '../components/auth/AuthLayout.vue';
 
 const { updatePassword } = useAuth();
 const router = useRouter();
@@ -12,20 +15,22 @@ const loading = ref(false);
 const errorMsg = ref('');
 
 const handleSubmit = async () => {
-  if (password.value !== passwordConfirm.value) {
-    errorMsg.value = 'Passwörter stimmen nicht überein.';
+  if (password.value.length < 8) {
+    errorMsg.value = 'Das Passwort muss mindestens 8 Zeichen lang sein.';
     return;
   }
-
+  if (password.value !== passwordConfirm.value) {
+    errorMsg.value = 'Die Passwörter stimmen nicht überein.';
+    return;
+  }
   loading.value = true;
   errorMsg.value = '';
-  
   try {
     await updatePassword(password.value);
-    alert('Dein Passwort wurde erfolgreich aktualisiert.');
+    toast.success('Dein Passwort wurde geändert.');
     router.push({ name: 'dashboard' });
-  } catch (e: any) {
-    errorMsg.value = e.message;
+  } catch (e) {
+    errorMsg.value = authErrorMessage(e);
   } finally {
     loading.value = false;
   }
@@ -33,42 +38,21 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-base-200 p-4">
-    <div class="card w-full max-w-sm shadow-2xl bg-base-100">
-      <div class="card-body">
-        <h2 class="card-title justify-center mb-4">
-          Neues Passwort setzen
-        </h2>
-
-        <form @submit.prevent="handleSubmit" class="space-y-4">
-          <input 
-            v-model="password" 
-            type="password" 
-            placeholder="Neues Passwort" 
-            class="input input-bordered w-full" 
-            required 
-            minlength="6"
-          />
-          
-          <input 
-            v-model="passwordConfirm" 
-            type="password" 
-            placeholder="Passwort bestätigen" 
-            class="input input-bordered w-full" 
-            required 
-            minlength="6"
-          />
-          
-          <div v-if="errorMsg" class="text-error text-sm text-center">
-            {{ errorMsg }}
-          </div>
-
-          <button type="submit" class="btn btn-primary w-full" :disabled="loading">
-            <span v-if="loading" class="loading loading-spinner"></span>
-            Passwort aktualisieren
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
+  <AuthLayout title="Neues Passwort" subtitle="Mindestens 8 Zeichen.">
+    <form class="flex flex-col gap-3" @submit.prevent="handleSubmit">
+      <label class="flex flex-col gap-1.5">
+        <span class="text-sm font-semibold">Neues Passwort</span>
+        <input v-model="password" type="password" autocomplete="new-password" class="input w-full" required minlength="8" />
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-sm font-semibold">Wiederholen</span>
+        <input v-model="passwordConfirm" type="password" autocomplete="new-password" class="input w-full" required minlength="8" />
+      </label>
+      <p v-if="errorMsg" class="text-error text-sm" role="alert">{{ errorMsg }}</p>
+      <button type="submit" class="btn btn-primary w-full" :disabled="loading">
+        <span v-if="loading" class="loading loading-spinner loading-sm"></span>
+        Passwort speichern
+      </button>
+    </form>
+  </AuthLayout>
 </template>

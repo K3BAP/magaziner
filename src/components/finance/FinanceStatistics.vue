@@ -195,7 +195,7 @@ const formatCurrency = (value: number) => {
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto pb-24 p-4 space-y-6 relative">
+  <div class="space-y-6 relative">
     
     <!-- Header / Filter Bar -->
     <div class="flex flex-col gap-3 mb-4">
@@ -225,24 +225,24 @@ const formatCurrency = (value: number) => {
 
     <!-- KPIs -->
     <div class="grid grid-cols-3 gap-4">
-      <div class="bg-base-100 rounded-xl p-4 shadow-sm border border-base-200 flex flex-col justify-center items-center text-center">
+      <div class="surface p-4 flex flex-col justify-center items-center text-center">
         <div class="text-xs text-base-content/70 font-medium mb-1">Ausgaben</div>
         <div class="text-lg font-bold text-error">{{ formatCurrency(totalExpenses) }}</div>
       </div>
       
-      <div class="bg-base-100 rounded-xl p-4 shadow-sm border border-base-200 flex flex-col justify-center items-center text-center">
+      <div class="surface p-4 flex flex-col justify-center items-center text-center">
         <div class="text-xs text-base-content/70 font-medium mb-1">Ø pro Monat</div>
         <div class="text-lg font-bold">{{ formatCurrency(averageMonthly) }}</div>
       </div>
 
-      <div class="bg-base-100 rounded-xl p-4 shadow-sm border border-base-200 flex flex-col justify-center items-center text-center">
+      <div class="surface p-4 flex flex-col justify-center items-center text-center">
         <div class="text-xs text-base-content/70 font-medium mb-1">Stärkster Monat</div>
         <div class="text-lg font-bold">{{ highestMonthName }}</div>
       </div>
     </div>
 
     <!-- Monthly Bar Chart -->
-    <div class="bg-base-100 rounded-xl p-4 shadow-sm border border-base-200">
+    <div class="surface p-4">
       <div class="flex justify-between items-center mb-4">
         <h3 class="font-bold text-base-content">Jahresverlauf</h3>
         <span v-if="selectedCategoryFilter" class="badge badge-primary badge-sm">{{ selectedCategoryFilter }}</span>
@@ -254,7 +254,7 @@ const formatCurrency = (value: number) => {
     </div>
 
     <!-- Top Categories -->
-    <div class="bg-base-100 rounded-xl p-4 shadow-sm border border-base-200">
+    <div class="surface p-4">
       <div class="flex justify-between items-center mb-4">
         <h3 class="font-bold text-base-content">Top Kategorien</h3>
         <span v-if="selectedMonthFilter !== null" class="badge badge-primary badge-sm">

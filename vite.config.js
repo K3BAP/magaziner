@@ -17,11 +17,12 @@ export default defineConfig({
       registerType: 'autoUpdate', // Updates werden sofort geladen
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Mein Haushalts-Manager',
-        short_name: 'Haushalt',
-        description: 'Verwaltung meines Haushalts',
-        theme_color: '#ffffff', // Farbe der Statusleiste (oben am Handy)
-        background_color: '#ffffff', // Hintergrundfarbe beim Starten
+        name: 'Mein Magaziner',
+        short_name: 'Magaziner',
+        description: 'Vorräte, Einkaufslisten, Aufgaben und Finanzen für deinen Haushalt.',
+        lang: 'de',
+        theme_color: '#f6f5f1', // Farbe der Statusleiste (oben am Handy)
+        background_color: '#f6f5f1', // Hintergrundfarbe beim Starten
         display: 'standalone', // Versteckt die Browser-Adressleiste!
         icons: [
           {
@@ -42,6 +43,21 @@ export default defineConfig({
             purpose: 'any maskable'
           }
         ]
-      }
+      },
+      workbox: {
+        // Chunks are split per route now; precache them all for offline starts.
+        globPatterns: ['**/*.{js,css,html,woff2,png,ico,svg}'],
+      },
     })],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vue: ['vue', 'vue-router'],
+          supabase: ['@supabase/supabase-js'],
+          charts: ['chart.js', 'vue-chartjs'],
+        },
+      },
+    },
+  },
 })

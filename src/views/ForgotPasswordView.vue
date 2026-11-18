@@ -1,26 +1,25 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useAuth } from '../composables/useAuth';
 import { RouterLink } from 'vue-router';
+import { useAuth } from '../composables/useAuth';
+import { authErrorMessage } from '../utils/authErrors';
+import AuthLayout from '../components/auth/AuthLayout.vue';
 
 const { resetPassword } = useAuth();
 
 const email = ref('');
 const loading = ref(false);
 const errorMsg = ref('');
-const successMsg = ref('');
+const sent = ref(false);
 
 const handleSubmit = async () => {
   loading.value = true;
   errorMsg.value = '';
-  successMsg.value = '';
-  
   try {
     await resetPassword(email.value);
-    successMsg.value = 'Falls ein Konto mit dieser E-Mail existiert, haben wir einen Link zum Zurücksetzen gesendet.';
-    email.value = '';
-  } catch (e: any) {
-    errorMsg.value = e.message;
+    sent.value = true;
+  } catch (e) {
+    errorMsg.value = authErrorMessage(e);
   } finally {
     loading.value = false;
   }
@@ -28,46 +27,27 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-base-200 p-4">
-    <div class="card w-full max-w-sm shadow-2xl bg-base-100">
-      <div class="card-body">
-        <h2 class="card-title justify-center mb-4">
-          Passwort vergessen
-        </h2>
-        
-        <p class="text-sm text-center mb-4 text-base-content/80">
-          Gib Deine E-Mail-Adresse ein und wir senden Dir einen Link zum Zurücksetzen des Passworts.
-        </p>
-
-        <form @submit.prevent="handleSubmit" class="space-y-4">
-          <input 
-            v-model="email" 
-            type="email" 
-            placeholder="Email" 
-            class="input input-bordered w-full" 
-            required 
-          />
-          
-          <div v-if="errorMsg" class="text-error text-sm text-center">
-            {{ errorMsg }}
-          </div>
-          
-          <div v-if="successMsg" class="text-success text-sm text-center">
-            {{ successMsg }}
-          </div>
-
-          <button type="submit" class="btn btn-primary w-full" :disabled="loading">
-            <span v-if="loading" class="loading loading-spinner"></span>
-            Link senden
-          </button>
-        </form>
-
-        <div class="text-center mt-4 text-sm">
-          <RouterLink to="/login" class="link link-primary">
-            Zurück zum Login
-          </RouterLink>
-        </div>
-      </div>
+  <AuthLayout title="Passwort vergessen" subtitle="Wir schicken dir einen Link, mit dem du ein neues Passwort setzt.">
+    <div v-if="sent" class="text-center flex flex-col gap-2 py-2">
+      <div class="text-4xl">📬</div>
+      <p class="font-semibold">Schau in dein Postfach</p>
+      <p class="text-sm text-base-content/65">
+        Falls es ein Konto mit dieser E-Mail gibt, ist der Link unterwegs. Prüfe auch den Spam-Ordner.
+      </p>
     </div>
-  </div>
+    <form v-else class="flex flex-col gap-3" @submit.prevent="handleSubmit">
+      <label class="flex flex-col gap-1.5">
+        <span class="text-sm font-semibold">E-Mail</span>
+        <input v-model="email" type="email" autocomplete="email" inputmode="email" class="input w-full" required />
+      </label>
+      <p v-if="errorMsg" class="text-error text-sm" role="alert">{{ errorMsg }}</p>
+      <button type="submit" class="btn btn-primary w-full" :disabled="loading">
+        <span v-if="loading" class="loading loading-spinner loading-sm"></span>
+        Link senden
+      </button>
+    </form>
+    <template #after>
+      <RouterLink to="/login" class="text-center text-sm link link-primary font-semibold">Zurück zur Anmeldung</RouterLink>
+    </template>
+  </AuthLayout>
 </template>

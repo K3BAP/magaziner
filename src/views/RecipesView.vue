@@ -1,125 +1,105 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRecipes } from '../composables/useRecipes';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useRecipes } from '../composables/useRecipes';
+import { toast } from '../composables/useToast';
+import { searchTerms, normalize } from '../utils/text';
+import BottomSheet from '../components/ui/BottomSheet.vue';
+import AppFab from '../components/ui/AppFab.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
+import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
 
 const { recipes, fetchRecipes, addRecipe, loading } = useRecipes();
 const router = useRouter();
 
-const showAddModal = ref(false);
-const newRecipeName = ref('');
-const isCreating = ref(false);
+const showAdd = ref(false);
+const newName = ref('');
+const creating = ref(false);
+const query = ref('');
 
 onMounted(() => {
-  fetchRecipes();
+  if (recipes.value.length === 0) fetchRecipes();
 });
 
-const openAddModal = () => {
-  newRecipeName.value = '';
-  showAddModal.value = true;
-};
+const filtered = computed(() => {
+  const terms = searchTerms(query.value);
+  if (!terms.length) return recipes.value;
+  return recipes.value.filter((r) => {
+    const hay = normalize(`${r.name} ${(r.ingredients ?? []).map((i) => i.name).join(' ')}`);
+    return terms.every((t) => hay.includes(t));
+  });
+});
 
-const handleCreate = async () => {
-  if (!newRecipeName.value.trim()) return;
-  
+const create = async () => {
+  if (!newName.value.trim()) return;
+  creating.value = true;
   try {
-    isCreating.value = true;
-    const newRecipe = await addRecipe(newRecipeName.value);
-    showAddModal.value = false;
-    
-    if (newRecipe) {
-      // Direkt zum Editieren weiterleiten
-      router.push({ name: 'recipe-detail', params: { id: newRecipe.id }, query: { edit: 'true' } });
-    }
+    const r = await addRecipe(newName.value.trim());
+    showAdd.value = false;
+    if (r) router.push({ name: 'recipe-detail', params: { id: r.id }, query: { edit: 'true' } });
   } catch (e) {
-    alert('Fehler beim Erstellen des Rezepts');
+    toast.error('Rezept konnte nicht angelegt werden.', e);
   } finally {
-    isCreating.value = false;
+    creating.value = false;
   }
-};
-
-const navigateToRecipe = (id: string) => {
-  router.push({ name: 'recipe-detail', params: { id } });
 };
 </script>
 
 <template>
   <div>
-    <div v-if="loading && recipes.length === 0" class="flex justify-center py-10">
-      <span class="loading loading-spinner loading-lg text-primary"></span>
+    <label v-if="recipes.length > 4" class="input w-full rounded-full bg-base-100 border-0 mb-4">
+      <MagnifyingGlassIcon class="h-5 w-5 opacity-50" />
+      <input v-model="query" type="search" placeholder="Rezept oder Zutat suchen" autocomplete="off" />
+    </label>
+
+    <div v-if="loading && recipes.length === 0" class="grid grid-cols-2 gap-3">
+      <div v-for="i in 4" :key="i" class="skeleton aspect-[4/5] rounded-[1.25rem]" />
     </div>
 
-    <div v-else-if="recipes.length === 0" class="text-center py-10 opacity-50">
-      <div class="text-6xl mb-4">👨‍🍳</div>
-      <p>Noch keine Rezepte gespeichert.</p>
-      <button @click="openAddModal" class="btn btn-link">Erstelle jetzt dein erstes!</button>
-    </div>
+    <EmptyState
+      v-else-if="recipes.length === 0"
+      icon="👩‍🍳"
+      title="Dein Kochbuch ist leer"
+      text="Speichere Lieblingsrezepte mit Zutaten – fehlende Zutaten landen mit einem Tipp auf der Einkaufsliste."
+    >
+      <button type="button" class="btn btn-primary gap-2" @click="showAdd = true; newName = ''"><PlusIcon class="h-5 w-5" /> Erstes Rezept</button>
+    </EmptyState>
 
-    <div v-else class="flex flex-col gap-4 pb-20">
-      <div 
-        v-for="recipe in recipes" 
-        :key="recipe.id" 
-        @click="navigateToRecipe(recipe.id)"
-        class="card card-side bg-base-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden group border border-base-200 h-40"
+    <div v-else class="grid grid-cols-2 gap-3">
+      <RouterLink
+        v-for="r in filtered"
+        :key="r.id"
+        :to="{ name: 'recipe-detail', params: { id: r.id } }"
+        class="surface pressable overflow-hidden flex flex-col"
       >
-        <figure class="w-1/3 min-w-[33%] bg-base-200 relative h-full">
-          <img 
-            v-if="recipe.image_url" 
-            :src="recipe.image_url" 
-            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            alt="Rezept Bild" 
-            onerror="this.style.display='none'"
-          />
-          <div v-else class="flex items-center justify-center w-full h-full text-4xl bg-base-200 text-base-content/20">
-            🍽️
-          </div>
-        </figure>
-        <div class="card-body w-2/3 p-4 justify-between">
-          <div>
-            <h2 class="card-title text-lg">{{ recipe.name }}</h2>
-            <p class="text-xs text-gray-500 line-clamp-2 mt-1">
-              {{ recipe.description || 'Keine Beschreibung' }}
-            </p>
-          </div>
-          <div class="card-actions justify-end">
-             <div class="badge badge-outline badge-sm">{{ recipe.ingredients?.length || 0 }} Zutaten</div>
+        <div class="aspect-[4/3] bg-base-300 overflow-hidden">
+          <img v-if="r.image_url" :src="r.image_url" :alt="r.name" class="w-full h-full object-cover" loading="lazy" />
+          <div v-else class="w-full h-full flex items-center justify-center text-4xl opacity-30">🍽️</div>
+        </div>
+        <div class="p-3">
+          <div class="font-semibold leading-snug line-clamp-2">{{ r.name }}</div>
+          <div class="text-xs text-base-content/55 mt-1">
+            {{ r.ingredients?.length || 0 }} Zutaten<template v-if="r.servings"> · {{ r.servings }} Port.</template>
           </div>
         </div>
-      </div>
+      </RouterLink>
     </div>
+    <EmptyState v-if="recipes.length && !filtered.length" compact icon="🔍" title="Kein Rezept gefunden" />
 
-    <!-- Floating Action Button -->
-    <div class="fixed bottom-6 right-6 z-20">
-      <button @click="openAddModal" class="btn btn-circle btn-primary btn-lg shadow-xl">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-      </button>
-    </div>
+    <AppFab v-if="recipes.length" label="Rezept" extended @click="showAdd = true; newName = ''">
+      <PlusIcon class="h-6 w-6" />
+    </AppFab>
 
-    <!-- Add Modal -->
-    <div v-if="showAddModal" class="modal modal-open modal-bottom sm:modal-middle" @click.self="showAddModal = false">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-4">Neues Rezept</h3>
-        <input
-          v-model="newRecipeName"
-          @keyup.enter="handleCreate"
-          type="text"
-          placeholder="Name des Gerichts (z.B. Pfannkuchen)"
-          class="input input-bordered w-full mb-4"
-          autofocus
-        />
-        <div class="flex justify-end gap-2">
-          <button @click="showAddModal = false" class="btn btn-ghost">Abbrechen</button>
-          <button
-            @click="handleCreate"
-            class="btn btn-primary"
-            :disabled="!newRecipeName.trim() || isCreating"
-          >
-            <span v-if="isCreating" class="loading loading-spinner loading-xs"></span>
-            Erstellen
-          </button>
-        </div>
-      </div>
-    </div>
-
+    <BottomSheet v-model:open="showAdd" title="Neues Rezept" size="sm">
+      <form @submit.prevent="create">
+        <input v-model="newName" class="input input-lg w-full" placeholder="z. B. Pfannkuchen" autocomplete="off" autofocus />
+      </form>
+      <template #footer>
+        <button type="button" class="btn btn-ghost" @click="showAdd = false">Abbrechen</button>
+        <button type="button" class="btn btn-primary min-w-28" :disabled="!newName.trim() || creating" @click="create">
+          <span v-if="creating" class="loading loading-spinner loading-sm" /> Weiter
+        </button>
+      </template>
+    </BottomSheet>
   </div>
 </template>

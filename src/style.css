@@ -133,6 +133,15 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* iOS zooms into any focused field below 16px — keep fields at 16px there. */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 /* Legacy daisyUI dialogs that are still around keep clear of the keyboard. */
 .modal-box {
   margin-bottom: var(--keyboard-inset, 0px);

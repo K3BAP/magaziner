@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { useFinance } from '../../composables/useFinance';
+import { todayLocalISO } from '../../utils/date';
+import { TrashIcon } from '@heroicons/vue/24/outline';
 import {
   ArrowLeftIcon,
   XMarkIcon,
@@ -8,14 +10,24 @@ import {
   ArrowRightIcon,
 } from '@heroicons/vue/24/outline';
 
-const props = defineProps<{ open: boolean }>();
+/**
+ * `transaction` → edit that payment. `prefill` → start a new payment with
+ * amount / payer / receiver filled in (used by „Ausgleichen“).
+ */
+const props = defineProps<{
+  open: boolean;
+  transaction?: any | null;
+  prefill?: { amount: number; payerId: string; receiverId: string } | null;
+}>();
 const emit = defineEmits<{
   close: [];
   saved: [];
   'add-member': [];
+  delete: [];
 }>();
 
-const { members, addTransaction } = useFinance();
+const { members, addTransaction, updateTransaction } = useFinance();
+const isEdit = computed(() => !!props.transaction);
 
 type Step = 1 | 2 | 3;
 const step = ref<Step>(1);
@@ -29,7 +41,7 @@ const amount = computed(() => {
 });
 const payerId = ref<string>('');
 const receiverId = ref<string>('');
-const date = ref(new Date().toISOString().split('T')[0]);
+const date = ref(todayLocalISO());
 
 // Three-phase save UX (matches ExpenseWizard): saving → justSaved → emit.
 const saving = ref(false);
@@ -44,10 +56,24 @@ const reset = () => {
   amountInput.value = '';
   payerId.value = '';
   receiverId.value = '';
-  date.value = new Date().toISOString().split('T')[0];
+  date.value = todayLocalISO();
   saving.value = false;
   justSaved.value = false;
   errorMsg.value = null;
+
+  const t = props.transaction;
+  const p = props.prefill;
+  if (t) {
+    amountInput.value = Number(t.amount).toFixed(2).replace('.', ',');
+    payerId.value = t.payer_id ?? '';
+    receiverId.value = t.receiver_id ?? '';
+    date.value = t.date;
+  } else if (p) {
+    amountInput.value = p.amount.toFixed(2).replace('.', ',');
+    payerId.value = p.payerId;
+    receiverId.value = p.receiverId;
+    step.value = 3; // everything is filled in — just confirm
+  }
 };
 
 watch(
@@ -119,14 +145,9 @@ const save = async () => {
   saving.value = true;
   errorMsg.value = null;
   try {
-    const result = await addTransaction(
-      'payment',
-      amount.value,
-      payerId.value,
-      date.value,
-      undefined,
-      receiverId.value
-    );
+    const result = isEdit.value
+      ? await updateTransaction(props.transaction.id, 'payment', amount.value, payerId.value, date.value, undefined, receiverId.value)
+      : await addTransaction('payment', amount.value, payerId.value, date.value, undefined, receiverId.value);
     if (!result) throw new Error('Speichern fehlgeschlagen.');
     saving.value = false;
     justSaved.value = true;
@@ -150,7 +171,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
       aria-modal="true"
     >
       <!-- Header -->
-      <header class="flex items-center gap-2 px-3 py-3 border-b border-base-300 shrink-0">
+      <header class="wizard-header flex items-center gap-2 px-3 py-3 border-b border-base-300 shrink-0">
         <button
           type="button"
           class="btn btn-ghost btn-circle btn-sm"
@@ -161,11 +182,21 @@ const stepLabels = ['Betrag', 'Von', 'An'];
           <ArrowLeftIcon class="h-5 w-5" />
         </button>
         <div class="flex-1 min-w-0">
-          <h1 class="font-bold text-base leading-tight truncate">Neue Zahlung</h1>
+          <h1 class="font-bold text-base leading-tight truncate">{{ isEdit ? 'Zahlung bearbeiten' : 'Neue Zahlung' }}</h1>
           <p class="text-xs text-base-content/60">
             Schritt {{ step }} von 3 · {{ stepLabels[step - 1] }}
           </p>
         </div>
+        <button
+          v-if="isEdit"
+          type="button"
+          class="btn btn-ghost btn-circle btn-sm text-error"
+          :disabled="saving"
+          aria-label="Zahlung löschen"
+          @click="emit('delete')"
+        >
+          <TrashIcon class="h-5 w-5" />
+        </button>
         <button
           type="button"
           class="btn btn-ghost btn-circle btn-sm"
@@ -237,6 +268,10 @@ const stepLabels = ['Betrag', 'Von', 'An'];
 
         <!-- Step 3: Receiver + Date -->
         <div v-else-if="step === 3" :key="3" class="flex flex-col gap-4">
+          <div class="rounded-2xl bg-success/10 px-4 py-3 text-center">
+            <div class="font-display text-3xl tabular-nums">{{ Number.isFinite(amount) ? amount.toFixed(2).replace('.', ',') : '0,00' }} €</div>
+            <div class="text-sm text-base-content/65">von {{ members.find((m) => m.id === payerId)?.name ?? '?' }}</div>
+          </div>
           <div>
             <label class="text-sm text-base-content/60">An wen?</label>
           </div>
@@ -280,7 +315,7 @@ const stepLabels = ['Betrag', 'Von', 'An'];
       </section>
 
       <!-- Footer -->
-      <footer class="px-4 py-3 border-t border-base-300 shrink-0">
+      <footer class="wizard-footer px-4 py-3 border-t border-base-300 shrink-0">
         <button
           type="button"
           class="btn btn-success btn-block btn-lg gap-2"
@@ -310,6 +345,13 @@ const stepLabels = ['Betrag', 'Von', 'An'];
 </template>
 
 <style scoped>
+.wizard-header {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+.wizard-footer {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 /* --- Wizard entrance/exit: slide up from the bottom edge of the viewport. */
 .wizard-enter-active,
 .wizard-leave-active {

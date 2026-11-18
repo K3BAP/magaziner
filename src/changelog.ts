@@ -21,9 +21,58 @@ export interface ChangelogEntry {
   title?: string;
   /** Bullet list of user-facing changes. */
   items: string[];
+  /**
+   * Optional feature tour shown page by page before the bullet list (used for
+   * major releases like 2.0).
+   */
+  highlights?: { icon: string; title: string; text: string }[];
 }
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: '2.0.0',
+    date: '2026-11-18',
+    title: 'Magaziner 2.0',
+    highlights: [
+      {
+        icon: '✨',
+        title: 'Willkommen bei Magaziner 2.0',
+        text: 'Neues Design, neue Navigation und viele Ärgernisse weniger. Hier ist das Wichtigste auf drei Seiten.',
+      },
+      {
+        icon: '🧭',
+        title: 'Alles mit dem Daumen',
+        text: 'Unten findest du jetzt Übersicht, Vorräte, Einkauf und Finanzen. Aufgaben, Rezepte und Einstellungen stecken unter „Mehr“.',
+      },
+      {
+        icon: '⚡',
+        title: 'Live im ganzen Haushalt',
+        text: 'Hakt jemand etwas auf der Einkaufsliste ab, siehst du es sofort. Unter „Was zuletzt passiert ist“ steht, wer was gemacht hat.',
+      },
+      {
+        icon: '↩️',
+        title: 'Rückgängig statt Rückfrage',
+        text: 'Wische Einträge zum Löschen zur Seite. Vertippt? Ein Tipp auf „Rückgängig“ holt alles zurück.',
+      },
+    ],
+    items: [
+      'Neues Design mit eigener Farbwelt, neuer Schrift und Dunkelmodus, der auf Wunsch dem System folgt.',
+      'Neue Navigationsleiste unten, Zurück-Pfeil auf allen Unterseiten und ein „Mehr“-Menü mit schnellem Haushaltswechsel.',
+      'Einkaufsliste: Änderungen anderer erscheinen live. Einträge lassen sich bearbeiten, mit Notiz versehen, in eine andere Liste verschieben und per Wischen löschen.',
+      'Einkaufsliste: Beim Tippen schlägt dir die App frühere Einträge vor. Abgehakte Einkäufe buchst du mit „In den Vorrat“ direkt ein.',
+      'Aufgaben bekommen ein Fälligkeitsdatum, eine Wiederholung (täglich, wöchentlich, monatlich) und auf Wunsch eine zuständige Person. Mit „Für mich“ siehst du nur deine.',
+      'Vorräte: Ein Tipp auf ein Produkt öffnet alle Details. Jede Packung hat ihr eigenes Ablauf- und Öffnungsdatum, und du kannst Produkte in einen anderen Ort verschieben.',
+      'Vorräte: Filter für abgelaufen, bald fällig, geöffnet und knapp. Die Suche findet auch ohne Umlaute.',
+      'Scanner: Einmal gescannte Barcodes erkennt Magaziner wieder und bietet direkt „+1 Packung“ an.',
+      'Unterschreitet ein Produkt den Mindestbestand, landet es zuverlässig wieder auf der Einkaufsliste, auch wenn es dort schon einmal abgehakt war.',
+      'Finanzen: Ausgaben und Zahlungen bearbeitest du im selben Schritt-Dialog wie beim Anlegen. Unter „Ausgleichen“ siehst du, wer wem wie viel überweisen sollte.',
+      'Rezepte: eigene Fotos hochladen, Portionen umrechnen und sehen, welche Zutaten du schon im Vorrat hast. „Fehlende“ setzt nur den Rest auf die Liste.',
+      'Dein Dashboard-Layout wird jetzt in deinem Konto gespeichert und ist auf allen Geräten gleich.',
+      'Behoben: Kurz nach Mitternacht wurde manchmal das Datum vom Vortag vorausgefüllt.',
+      'Behoben: Beim Haushaltswechsel konnten kurz Daten des vorherigen Haushalts aufblitzen.',
+      'Mehr Sicherheit: Rezepttexte werden vor der Anzeige bereinigt.',
+    ],
+  },
   {
     version: '0.8.0',
     date: '2026-08-19',

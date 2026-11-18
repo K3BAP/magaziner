@@ -1,15 +1,36 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useRecipes, type Recipe, type Ingredient } from '../composables/useRecipes';
-import { useShoppingList } from '../composables/useShoppingList';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { useRecipes, type Recipe, type Ingredient } from '../composables/useRecipes';
+import { useShoppingList } from '../composables/useShoppingList';
+import { useShoppingLists } from '../composables/useShoppingLists';
+import { useInventory, totalQuantity } from '../composables/useInventory';
+import { usePageTitle } from '../composables/usePageTitle';
+import { toast } from '../composables/useToast';
+import { confirmDialog } from '../composables/useConfirm';
+import { normalize } from '../utils/text';
+import { scaleQuantity } from '../utils/scaleQuantity';
+import { encodeRecipeImage } from '../utils/image';
+import Stepper from '../components/ui/Stepper.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
+import {
+  PencilSquareIcon,
+  TrashIcon,
+  PlusIcon,
+  XMarkIcon,
+  CameraIcon,
+  ShoppingCartIcon,
+  CheckCircleIcon,
+} from '@heroicons/vue/24/outline';
 
 const route = useRoute();
 const router = useRouter();
-const { fetchRecipeById, updateRecipe, deleteRecipe } = useRecipes();
-const { addItem: addToShoppingListStore } = useShoppingList();
+const { fetchRecipeById, updateRecipe, deleteRecipe, uploadRecipeImage } = useRecipes();
+const { addMany } = useShoppingList();
+const { activeList } = useShoppingLists();
+const { items: inventory } = useInventory();
 
 const recipeId = route.params.id as string;
 const recipe = ref<Recipe | null>(null);
@@ -17,29 +38,25 @@ const loading = ref(true);
 const isEditing = ref(false);
 const isSaving = ref(false);
 
-// Edit State
+usePageTitle(() => (isEditing.value ? 'Rezept bearbeiten' : recipe.value?.name ?? null));
+
+// --- Edit state ---
 const editName = ref('');
 const editDescription = ref('');
 const editImageUrl = ref('');
+const editServings = ref<number | null>(null);
 const editIngredients = ref<Ingredient[]>([]);
+const uploading = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
 
-// Initialize
-const loadRecipe = async () => {
-  loading.value = true;
+onMounted(async () => {
   const data = await fetchRecipeById(recipeId);
-  if (!data) {
-    alert('Rezept nicht gefunden');
-    router.push({ name: 'recipes' });
-    return;
-  }
-  recipe.value = data;
   loading.value = false;
-
-  // Check query param for auto-edit
-  if (route.query.edit === 'true') {
-     startEditing();
-  }
-};
+  if (!data) return;
+  recipe.value = { ...data, ingredients: data.ingredients ?? [] };
+  servings.value = data.servings ?? 2;
+  if (route.query.edit === 'true') startEditing();
+});
 
 const parsedDescription = computed(() => {
   if (!recipe.value?.description) return '';
@@ -47,261 +64,271 @@ const parsedDescription = computed(() => {
   return DOMPurify.sanitize(marked.parse(recipe.value.description, { async: false }) as string);
 });
 
-onMounted(() => {
-  loadRecipe();
-});
+// --- Servings scaling ---
+const servings = ref(2);
+const baseServings = computed(() => recipe.value?.servings ?? null);
+const factor = computed(() => (baseServings.value ? servings.value / baseServings.value : 1));
 
+// --- Inventory check ---
+const stockFor = (ing: Ingredient) => {
+  const n = normalize(ing.name);
+  if (!n) return null;
+  const match = inventory.value.find((i) => {
+    const m = normalize(i.name);
+    return m === n || m.includes(n) || n.includes(m);
+  });
+  return match && totalQuantity(match) > 0 ? match : null;
+};
+const missing = computed(() => (recipe.value?.ingredients ?? []).filter((i) => i.name.trim() && !stockFor(i)));
+
+const titleFor = (ing: Ingredient) => {
+  const q = scaleQuantity(ing.quantity, factor.value);
+  return q ? `${ing.name} (${q})` : ing.name;
+};
+
+const addToList = async (list: Ingredient[]) => {
+  const n = await addMany(list.map(titleFor));
+  if (n > 0) toast.success(`${n} ${n === 1 ? 'Zutat' : 'Zutaten'} auf „${activeList.value?.name ?? 'Einkaufsliste'}“`);
+};
+
+// --- Editing ---
 const startEditing = () => {
   if (!recipe.value) return;
   editName.value = recipe.value.name;
   editDescription.value = recipe.value.description || '';
   editImageUrl.value = recipe.value.image_url || '';
-  // Clone ingredients deeply
+  editServings.value = recipe.value.servings ?? null;
   editIngredients.value = JSON.parse(JSON.stringify(recipe.value.ingredients || []));
+  if (editIngredients.value.length === 0) addIngredient();
   isEditing.value = true;
 };
 
 const cancelEditing = () => {
   isEditing.value = false;
-  // Reset query param without reload
   router.replace({ query: {} });
 };
 
-// Ingredient Management
 const addIngredient = () => {
-  editIngredients.value.push({
-    id: crypto.randomUUID(),
-    name: '',
-    quantity: ''
-  });
+  editIngredients.value.push({ id: crypto.randomUUID(), name: '', quantity: '' });
 };
 
-const removeIngredient = (index: number) => {
-  editIngredients.value.splice(index, 1);
+const onPickImage = async (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  (e.target as HTMLInputElement).value = '';
+  if (!file) return;
+  uploading.value = true;
+  try {
+    const blob = await encodeRecipeImage(file);
+    editImageUrl.value = await uploadRecipeImage(recipeId, blob);
+  } catch (err: any) {
+    toast.error(err?.message ?? 'Bild konnte nicht hochgeladen werden.', err);
+  } finally {
+    uploading.value = false;
+  }
 };
 
-// Save
 const saveChanges = async () => {
   if (!editName.value.trim()) return;
-  
+  isSaving.value = true;
   try {
-    isSaving.value = true;
-    await updateRecipe(recipeId, {
-      name: editName.value,
+    const patch = {
+      name: editName.value.trim(),
       description: editDescription.value,
       image_url: editImageUrl.value || null,
-      ingredients: editIngredients.value
-    });
-    
-    // Update local view
-    if (recipe.value) {
-      recipe.value.name = editName.value;
-      recipe.value.description = editDescription.value;
-      recipe.value.image_url = editImageUrl.value || null;
-      recipe.value.ingredients = editIngredients.value; // JSON update
-    }
-    
+      servings: editServings.value && editServings.value > 0 ? Math.round(editServings.value) : null,
+      ingredients: editIngredients.value.filter((i) => i.name.trim()),
+    };
+    await updateRecipe(recipeId, patch);
+    if (recipe.value) Object.assign(recipe.value, patch);
+    servings.value = patch.servings ?? servings.value;
     isEditing.value = false;
-    router.replace({ query: {} }); // Clear edit param
+    router.replace({ query: {} });
+    toast.success('Rezept gespeichert');
   } catch (e) {
-    alert('Fehler beim Speichern');
+    toast.error('Rezept konnte nicht gespeichert werden.', e);
   } finally {
     isSaving.value = false;
   }
 };
 
-// Delete
 const handleDelete = async () => {
-  if (!confirm('Möchtest du dieses Rezept wirklich löschen?')) return;
+  const ok = await confirmDialog({
+    title: `„${recipe.value?.name}“ löschen?`,
+    confirmLabel: 'Löschen',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await deleteRecipe(recipeId);
-    router.push({ name: 'recipes' });
+    toast.success('Rezept gelöscht');
+    router.replace({ name: 'recipes' });
   } catch (e) {
-    alert('Fehler beim Löschen');
+    toast.error('Rezept konnte nicht gelöscht werden.', e);
   }
 };
-
-// Shopping List Integration
-const addIngredientToShoppingList = async (ing: Ingredient) => {
-  const title = ing.quantity ? `${ing.name} (${ing.quantity})` : ing.name;
-  await addToShoppingListStore(title);
-  // Optional: Feedback (toast) could be added here
-};
-
-const addAllIngredientsToShoppingList = async () => {
-  if (!recipe.value?.ingredients) return;
-  
-  if (!confirm(`Möchtest du alle ${recipe.value.ingredients.length} Zutaten auf die Einkaufsliste setzen?`)) return;
-
-  for (const ing of recipe.value.ingredients) {
-    await addIngredientToShoppingList(ing);
-  }
-};
-
 </script>
 
 <template>
-  <div v-if="loading" class="flex justify-center py-20">
-    <span class="loading loading-spinner loading-lg text-primary"></span>
+  <div v-if="loading" class="flex flex-col gap-4">
+    <div class="skeleton h-56 rounded-3xl" />
+    <div class="skeleton h-8 w-2/3 rounded-full" />
+    <div class="skeleton h-40 rounded-3xl" />
   </div>
 
-  <div v-else-if="recipe" class="pb-20">
-    <!-- Header / Navigation Removed (moved to Navbar) -->
+  <EmptyState v-else-if="!recipe" icon="🍽️" title="Rezept nicht gefunden" text="Vielleicht wurde es gelöscht.">
+    <button type="button" class="btn btn-primary btn-sm" @click="router.replace({ name: 'recipes' })">Zu den Rezepten</button>
+  </EmptyState>
 
-    <!-- VIEW MODE -->
-    <div v-if="!isEditing">
-      <div class="relative w-full h-64 md:h-80 bg-base-200 rounded-xl overflow-hidden mb-6 shadow-md group">
-        <img 
-          v-if="recipe.image_url" 
-          :src="recipe.image_url" 
-          class="w-full h-full object-cover"
-          alt="Rezept Bild"
-          onerror="this.style.display='none'"
-        />
-        <div v-else class="w-full h-full flex items-center justify-center text-6xl text-base-content/20">
-           🍽️
+  <div v-else>
+    <Teleport v-if="!isEditing" to="#header-actions" defer>
+      <button type="button" class="btn btn-ghost btn-circle" aria-label="Rezept bearbeiten" title="Bearbeiten" @click="startEditing">
+        <PencilSquareIcon class="h-6 w-6" />
+      </button>
+    </Teleport>
+
+    <!-- VIEW -->
+    <div v-if="!isEditing" class="flex flex-col gap-5">
+      <div class="relative w-full aspect-[16/10] rounded-3xl overflow-hidden bg-base-300">
+        <img v-if="recipe.image_url" :src="recipe.image_url" class="w-full h-full object-cover" :alt="recipe.name" />
+        <div v-else class="w-full h-full flex items-center justify-center text-7xl opacity-30">🍽️</div>
+        <div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/60 to-transparent">
+          <h2 class="font-display text-2xl text-white drop-shadow">{{ recipe.name }}</h2>
         </div>
-        
-        <button @click="startEditing" class="absolute top-4 right-4 btn btn-circle btn-primary shadow-lg opacity-80 hover:opacity-100 group-hover:scale-110 transition-all" title="Bearbeiten">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+      </div>
+
+      <!-- Ingredients -->
+      <section class="surface overflow-hidden">
+        <div class="flex items-center gap-3 px-4 pt-4 pb-3">
+          <h3 class="font-semibold flex-1">Zutaten</h3>
+          <div v-if="baseServings" class="flex items-center gap-2 text-sm">
+            <Stepper :value="servings" size="sm" @dec="servings = Math.max(1, servings - 1)" @inc="servings++" />
+            <span class="text-base-content/60">{{ servings === 1 ? 'Portion' : 'Portionen' }}</span>
+          </div>
+        </div>
+        <ul class="divide-y divide-base-200 border-t border-base-200">
+          <li v-for="ing in recipe.ingredients" :key="ing.id" class="flex items-center gap-3 pl-4 pr-2 min-h-12">
+            <span class="flex-1 min-w-0 py-2">
+              <span class="font-medium">{{ ing.name }}</span>
+              <span v-if="ing.quantity" class="text-base-content/60"> · {{ scaleQuantity(ing.quantity, factor) }}</span>
+              <span v-if="stockFor(ing)" class="flex items-center gap-1 text-xs text-success mt-0.5">
+                <CheckCircleIcon class="h-3.5 w-3.5" /> vorrätig
+              </span>
+            </span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-circle text-primary"
+              :aria-label="`${ing.name} auf die Einkaufsliste`"
+              @click="addToList([ing])"
+            >
+              <ShoppingCartIcon class="h-5 w-5" />
+            </button>
+          </li>
+          <li v-if="recipe.ingredients.length === 0" class="px-4 py-6 text-center text-sm text-base-content/55">Noch keine Zutaten.</li>
+        </ul>
+        <div v-if="recipe.ingredients.length" class="grid grid-cols-2 gap-2 p-3 border-t border-base-200">
+          <button type="button" class="btn btn-sm btn-primary" :disabled="missing.length === 0" @click="addToList(missing)">
+            Fehlende ({{ missing.length }})
+          </button>
+          <button type="button" class="btn btn-sm bg-base-200 border-0" @click="addToList(recipe.ingredients)">Alle auf die Liste</button>
+        </div>
+      </section>
+
+      <!-- Preparation -->
+      <section class="surface p-5">
+        <h3 class="font-semibold mb-2">Zubereitung</h3>
+        <div v-if="recipe.description" class="prose-recipe leading-relaxed" v-html="parsedDescription" />
+        <p v-else class="text-sm text-base-content/55">Noch keine Beschreibung.</p>
+      </section>
+    </div>
+
+    <!-- EDIT -->
+    <form v-else class="flex flex-col gap-5" @submit.prevent="saveChanges">
+      <div class="relative w-full aspect-[16/10] rounded-3xl overflow-hidden bg-base-300">
+        <img v-if="editImageUrl" :src="editImageUrl" class="w-full h-full object-cover" alt="" />
+        <div v-else class="w-full h-full flex items-center justify-center text-6xl opacity-30">🍽️</div>
+        <div class="absolute bottom-3 right-3 flex gap-2">
+          <button v-if="editImageUrl" type="button" class="btn btn-sm btn-circle bg-base-100/90 border-0" aria-label="Bild entfernen" @click="editImageUrl = ''">
+            <XMarkIcon class="h-4 w-4" />
+          </button>
+          <button type="button" class="btn btn-sm rounded-full bg-base-100/90 border-0 gap-1" :disabled="uploading" @click="fileInput?.click()">
+            <span v-if="uploading" class="loading loading-spinner loading-xs" />
+            <CameraIcon v-else class="h-4 w-4" />
+            {{ editImageUrl ? 'Foto ändern' : 'Foto hinzufügen' }}
+          </button>
+        </div>
+        <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onPickImage" />
+      </div>
+
+      <div class="surface p-5 flex flex-col gap-4">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-semibold">Name</span>
+          <input v-model="editName" class="input w-full" required />
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-sm font-semibold">Portionen <span class="font-normal text-base-content/50">(zum Umrechnen der Mengen)</span></span>
+          <input v-model.number="editServings" type="number" min="1" max="100" inputmode="numeric" class="input w-32" placeholder="z. B. 4" />
+        </label>
+      </div>
+
+      <div class="surface p-5 flex flex-col gap-3">
+        <span class="text-sm font-semibold">Zutaten</span>
+        <div v-for="(ing, idx) in editIngredients" :key="ing.id" class="flex gap-2 items-center">
+          <input v-model="ing.name" class="input input-sm flex-1 min-w-0" placeholder="Zutat, z. B. Mehl" />
+          <input v-model="ing.quantity" class="input input-sm w-24" placeholder="Menge" />
+          <button type="button" class="btn btn-ghost btn-sm btn-circle text-base-content/50" aria-label="Zutat entfernen" @click="editIngredients.splice(idx, 1)">
+            <XMarkIcon class="h-4 w-4" />
+          </button>
+        </div>
+        <button type="button" class="btn btn-sm btn-ghost self-start gap-1 text-primary" @click="addIngredient">
+          <PlusIcon class="h-4 w-4" /> Zutat
         </button>
       </div>
 
-      <h1 class="text-3xl font-bold mb-2 break-all">{{ recipe.name }}</h1>
-      
-      <div 
-        v-if="recipe.description" 
-        class="text-base-content mb-8 whitespace-pre-wrap leading-relaxed description-content"
-        v-html="parsedDescription"
-      ></div>
-      <p v-else class="text-gray-400 italic mb-8">Keine Beschreibung vorhanden.</p>
-
-      <div class="card bg-base-100 border border-base-200 shadow-sm">
-        <div class="card-body p-0">
-          <div class="p-4 border-b border-base-200 bg-base-50 rounded-t-xl flex justify-between items-center">
-             <h3 class="font-bold text-lg flex items-center gap-2">
-                🥕 Zutaten
-                <span class="badge badge-sm">{{ recipe.ingredients?.length || 0 }}</span>
-             </h3>
-             <button 
-               v-if="recipe.ingredients && recipe.ingredients.length > 0"
-               @click="addAllIngredientsToShoppingList" 
-               class="btn btn-xs btn-primary btn-outline gap-1"
-             >
-               Alles auf Einkaufsliste
-             </button>
-          </div>
-          <div class="divide-y divide-base-200">
-             <div v-for="ing in recipe.ingredients" :key="ing.id" class="p-3 flex justify-between items-center hover:bg-base-50 group">
-                <div>
-                  <span class="font-medium">{{ ing.name }}</span>
-                  <span class="text-gray-500 ml-2" v-if="ing.quantity">({{ ing.quantity }})</span>
-                </div>
-                <button 
-                  @click="addIngredientToShoppingList(ing)" 
-                  class="btn btn-ghost btn-xs btn-square text-primary" 
-                  title="Auf Einkaufsliste"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                </button>
-             </div>
-             <div v-if="!recipe.ingredients || recipe.ingredients.length === 0" class="p-6 text-center text-gray-400">
-                Noch keine Zutaten.
-             </div>
-          </div>
-        </div>
+      <div class="surface p-5 flex flex-col gap-1.5">
+        <span class="text-sm font-semibold">Zubereitung <span class="font-normal text-base-content/50">(Markdown: **fett**, 1. Liste)</span></span>
+        <textarea v-model="editDescription" class="textarea w-full min-h-48 text-base" placeholder="Schritt für Schritt …" />
       </div>
-    </div>
 
-    <!-- EDIT MODE -->
-    <div v-else class="max-w-2xl mx-auto bg-base-100 p-6 rounded-xl shadow-lg border border-base-200">
-       <h2 class="text-2xl font-bold mb-6 flex items-center justify-between">
-         Rezept bearbeiten
-         <button @click="handleDelete" class="btn btn-sm btn-ghost text-error" title="Löschen">
-           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-         </button>
-       </h2>
-
-       <!-- Basic Info -->
-       <div class="form-control mb-4">
-         <label class="label font-bold">Name</label>
-         <input v-model="editName" type="text" class="input input-bordered w-full" />
-       </div>
-
-       <div class="form-control mb-4">
-         <label class="label font-bold">Bild URL (Optional)</label>
-         <input v-model="editImageUrl" type="text" placeholder="https://..." class="input input-bordered w-full text-sm" />
-         <div v-if="editImageUrl" class="mt-2 h-32 w-full rounded-lg overflow-hidden border border-base-300 bg-base-200">
-             <img :src="editImageUrl" class="w-full h-full object-cover" onerror="this.style.display='none'" />
-         </div>
-       </div>
-
-       <div class="form-control mb-8">
-         <label class="label font-bold">Beschreibung / Zubereitung</label>
-         <textarea v-model="editDescription" class="textarea textarea-bordered h-32 text-base" placeholder="Schritt für Schritt Anleitung..."></textarea>
-       </div>
-
-       <!-- Ingredients Editor -->
-       <div class="mb-8">
-         <div class="flex justify-between items-center mb-2">
-            <label class="font-bold">Zutaten</label>
-            <button @click="addIngredient" class="btn btn-xs btn-outline btn-primary">+ Zutat</button>
-         </div>
-         
-         <div class="space-y-2">
-            <div 
-              v-for="(ing, idx) in editIngredients" 
-              :key="ing.id" 
-              class="flex gap-2 items-center bg-base-100 p-2 rounded-lg border border-base-200"
-            >
-               <input v-model="ing.name" type="text" placeholder="Zutat (z.B. Mehl)" class="input input-sm input-bordered w-full" />
-               <input v-model="ing.quantity" type="text" placeholder="Menge" class="input input-sm input-bordered w-24 text-right" />
-               <button @click="removeIngredient(idx)" class="btn btn-ghost btn-xs btn-square text-error">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-               </button>
-            </div>
-            
-            <div v-if="editIngredients.length === 0" class="text-center text-sm text-gray-400 py-4 border border-dashed border-base-300 rounded-lg">
-               Keine Zutaten. Klicke auf "+ Zutat".
-            </div>
-         </div>
-       </div>
-
-       <!-- Actions -->
-       <div class="flex justify-end gap-3 pt-4 border-t border-base-200">
-          <button @click="cancelEditing" class="btn btn-ghost">Abbrechen</button>
-          <button @click="saveChanges" class="btn btn-primary min-w-[120px]" :disabled="isSaving">
-            <span v-if="isSaving" class="loading loading-spinner loading-xs"></span>
-            Speichern
-          </button>
-       </div>
-
-    </div>
-
+      <div class="flex gap-2">
+        <button type="button" class="btn btn-ghost text-error gap-1" @click="handleDelete"><TrashIcon class="h-5 w-5" /> Löschen</button>
+        <div class="flex-1" />
+        <button type="button" class="btn btn-ghost" @click="cancelEditing">Abbrechen</button>
+        <button type="submit" class="btn btn-primary min-w-28" :disabled="isSaving || uploading">
+          <span v-if="isSaving" class="loading loading-spinner loading-sm" />
+          Speichern
+        </button>
+      </div>
+    </form>
   </div>
 </template>
 
-<style>
-.description-content ul {
-  list-style-type: disc;
-  margin-left: 1.5rem;
-  margin-bottom: 1rem;
+<style scoped>
+.prose-recipe :deep(ul) {
+  list-style: disc;
+  margin: 0 0 1rem 1.25rem;
 }
-.description-content ol {
-  list-style-type: decimal;
-  margin-left: 1.5rem;
-  margin-bottom: 1rem;
+.prose-recipe :deep(ol) {
+  list-style: decimal;
+  margin: 0 0 1rem 1.25rem;
 }
-.description-content h1, .description-content h2, .description-content h3 {
-  font-weight: bold;
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
+.prose-recipe :deep(li) {
+  margin-bottom: 0.35rem;
 }
-.description-content p {
-  margin-bottom: 1rem;
+.prose-recipe :deep(h1),
+.prose-recipe :deep(h2),
+.prose-recipe :deep(h3) {
+  font-weight: 700;
+  margin: 1.25rem 0 0.5rem;
 }
-.description-content a {
+.prose-recipe :deep(p) {
+  margin-bottom: 0.85rem;
+}
+.prose-recipe :deep(a) {
   color: var(--color-primary);
   text-decoration: underline;
+}
+.prose-recipe :deep(img) {
+  border-radius: 1rem;
+  max-width: 100%;
 }
 </style>

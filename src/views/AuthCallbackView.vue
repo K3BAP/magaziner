@@ -49,16 +49,16 @@ if (!oauthError) {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-base-200 p-4">
-    <div class="card w-full max-w-sm shadow-2xl bg-base-100">
-      <div class="card-body items-center text-center">
+  <div class="min-h-dvh flex items-center justify-center bg-base-200 p-4">
+    <div class="surface w-full max-w-sm">
+      <div class="p-6 flex flex-col items-center text-center gap-2">
         <template v-if="!errorMsg">
           <span class="loading loading-spinner loading-lg text-primary" />
-          <h2 class="card-title mt-2">Wird angemeldet…</h2>
+          <h2 class="font-display text-xl mt-2">Wird angemeldet…</h2>
           <p class="text-sm text-base-content/60">Einen Moment bitte.</p>
         </template>
         <template v-else>
-          <h2 class="card-title text-error">Anmeldung fehlgeschlagen</h2>
+          <h2 class="font-display text-xl text-error">Anmeldung fehlgeschlagen</h2>
           <p class="text-sm text-base-content/70">{{ errorMsg }}</p>
           <RouterLink to="/login" class="btn btn-primary btn-sm mt-3">
             Zurück zum Login
