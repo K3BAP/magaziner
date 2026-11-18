@@ -3,69 +3,53 @@ import { computed, type Component } from 'vue';
 
 type Tone = 'neutral' | 'error' | 'warning' | 'success' | 'info' | 'accent' | 'primary';
 
-const props = withDefaults(defineProps<{
-  title?: string;
-  icon?: Component;
-  tone?: Tone;
-  clickable?: boolean;
-  loading?: boolean;
-  muted?: boolean;
-  align?: 'center' | 'start';
-}>(), {
-  tone: 'neutral',
-  clickable: false,
-  loading: false,
-  muted: false,
-  align: 'start',
-});
+const props = withDefaults(
+  defineProps<{
+    title?: string;
+    icon?: Component;
+    tone?: Tone;
+    clickable?: boolean;
+    loading?: boolean;
+    muted?: boolean;
+    align?: 'center' | 'start';
+  }>(),
+  { tone: 'neutral', clickable: false, loading: false, muted: false, align: 'start' },
+);
 
-const accentClass = computed(() => {
-  switch (props.tone) {
-    case 'error': return 'bg-error';
-    case 'warning': return 'bg-warning';
-    case 'success': return 'bg-success';
-    case 'info': return 'bg-info';
-    case 'accent': return 'bg-accent';
-    case 'primary': return 'bg-primary';
-    default: return 'bg-base-300';
-  }
-});
-
-const iconColorClass = computed(() => {
-  switch (props.tone) {
-    case 'error': return 'text-error';
-    case 'warning': return 'text-warning';
-    case 'success': return 'text-success';
-    case 'info': return 'text-info';
-    case 'accent': return 'text-accent';
-    case 'primary': return 'text-primary';
-    default: return 'text-base-content/60';
-  }
-});
+const chip = computed(
+  () =>
+    ({
+      error: 'bg-error/12 text-error',
+      warning: 'bg-warning/18 text-warning',
+      success: 'bg-success/12 text-success',
+      info: 'bg-info/12 text-info',
+      accent: 'bg-accent/12 text-accent',
+      primary: 'bg-primary/12 text-primary',
+      neutral: 'bg-base-200 text-base-content/60',
+    })[props.tone],
+);
 </script>
 
 <template>
   <div
-    class="relative overflow-hidden rounded-2xl bg-base-100 border border-base-300/60 shadow-sm transition-all h-full flex flex-col"
-    :class="[
-      clickable && !muted ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : '',
-      muted ? 'opacity-50' : '',
-    ]"
+    class="surface h-full flex flex-col p-4 transition-transform"
+    :class="[clickable ? 'pressable cursor-pointer' : '', muted ? 'opacity-70' : '']"
   >
-    <span class="absolute inset-y-0 left-0 w-1" :class="accentClass" aria-hidden="true" />
+    <div v-if="title || icon" class="flex items-center gap-2 mb-3 min-w-0">
+      <span v-if="icon" class="h-7 w-7 rounded-xl flex items-center justify-center shrink-0" :class="chip">
+        <component :is="icon" class="h-4 w-4" />
+      </span>
+      <h3 v-if="title" class="text-[13px] font-semibold text-base-content/70 leading-tight line-clamp-2">{{ title }}</h3>
+      <div class="flex-1" />
+      <slot name="action" />
+    </div>
 
-    <div class="flex-1 flex flex-col p-4 pl-5" :class="align === 'center' ? 'items-center text-center' : ''">
-      <div v-if="title || icon" class="flex items-center gap-2 mb-2 w-full" :class="align === 'center' ? 'justify-center' : ''">
-        <component :is="icon" v-if="icon" class="h-5 w-5 shrink-0" :class="iconColorClass" />
-        <h3 v-if="title" class="text-xs uppercase tracking-wider font-semibold text-base-content/60 truncate">{{ title }}</h3>
-      </div>
-
-      <div v-if="loading" class="flex-1 flex items-center justify-center">
-        <span class="loading loading-spinner loading-md text-base-content/40" />
-      </div>
-      <div v-else class="flex-1 flex flex-col w-full" :class="align === 'center' ? 'items-center justify-center' : ''">
-        <slot />
-      </div>
+    <div v-if="loading" class="flex-1 flex flex-col gap-2 justify-center">
+      <div class="skeleton h-6 w-1/2 rounded-full" />
+      <div class="skeleton h-3 w-3/4 rounded-full" />
+    </div>
+    <div v-else class="flex-1 flex flex-col w-full" :class="align === 'center' ? 'items-center justify-center text-center' : ''">
+      <slot />
     </div>
   </div>
 </template>

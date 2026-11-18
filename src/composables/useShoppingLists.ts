@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
-import { useActiveHousehold } from './useActiveHousehold';
+import { useActiveHousehold, householdSnapshot } from './useActiveHousehold';
+import { toast } from './useToast';
 import { useShoppingCategories } from './useShoppingCategories';
 
 export interface ShoppingList {
@@ -41,15 +42,17 @@ export function useShoppingLists() {
   };
 
   // RLS clips this to the active household, so no explicit filter is needed.
-  const fetchLists = async () => {
+  const fetchLists = async (opts: { silent?: boolean } = {}) => {
     try {
-      loading.value = true;
+      if (!opts.silent) loading.value = true;
+      const isCurrent = householdSnapshot();
       const { data, error } = await supabase
         .from('shopping_lists')
         .select('*')
         .order('position', { ascending: true });
 
-      if (error) throw error;
+      if (!isCurrent()) return;
+            if (error) throw error;
       lists.value = data || [];
 
       // A household with no lists (brand-new, or pre-revamp edge case) gets a
@@ -59,7 +62,7 @@ export function useShoppingLists() {
       }
       restoreActiveList();
     } catch (error) {
-      console.error('Fehler beim Laden der Listen:', error);
+      toast.error('Fehler beim Laden der Listen.', error);
     } finally {
       loading.value = false;
     }
@@ -73,7 +76,7 @@ export function useShoppingLists() {
       .select()
       .single();
     if (error || !data) {
-      console.error('Fehler beim Anlegen der Standard-Liste:', error);
+      toast.error('Fehler beim Anlegen der Standard-Liste.', error);
       return;
     }
     lists.value = [data];
@@ -93,7 +96,7 @@ export function useShoppingLists() {
       .single();
 
     if (error || !data) {
-      console.error('Fehler beim Anlegen der Liste:', error);
+      toast.error('Fehler beim Anlegen der Liste.', error);
       return null;
     }
     lists.value.push(data);
@@ -117,7 +120,7 @@ export function useShoppingLists() {
     if (error) {
       list.name = prevName;
       list.icon = prevIcon;
-      console.error('Fehler beim Umbenennen der Liste:', error);
+      toast.error('Fehler beim Umbenennen der Liste.', error);
     }
   };
 
@@ -134,7 +137,7 @@ export function useShoppingLists() {
     const { error } = await supabase.from('shopping_lists').delete().eq('id', id);
     if (error) {
       lists.value = prev;
-      console.error('Fehler beim Löschen der Liste:', error);
+      toast.error('Fehler beim Löschen der Liste.', error);
       throw error;
     }
   };
@@ -156,7 +159,7 @@ export function useShoppingLists() {
     );
     const failed = results.find((r) => r.error);
     if (failed) {
-      console.error('Fehler beim Sortieren der Listen:', failed.error);
+      toast.error('Fehler beim Sortieren der Listen.', failed.error);
       prev.forEach((p) => {
         const list = lists.value.find((l) => l.id === p.id);
         if (list) list.position = p.position;

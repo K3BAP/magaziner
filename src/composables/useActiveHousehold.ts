@@ -22,3 +22,18 @@ export function useActiveHousehold() {
     activeHousehold,
   };
 }
+
+/**
+ * Snapshot the active household before an async fetch and check afterwards
+ * whether it is still the same. Responses that arrive after a household switch
+ * must be dropped, or they would overwrite the new household's data.
+ *
+ *   const isCurrent = householdSnapshot();
+ *   const { data } = await supabase.from('todos').select();
+ *   if (!isCurrent()) return;
+ */
+export function householdSnapshot(): () => boolean {
+  const { activeHouseholdId } = useActiveHousehold();
+  const hid = activeHouseholdId.value;
+  return () => activeHouseholdId.value === hid;
+}

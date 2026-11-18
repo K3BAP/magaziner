@@ -1,22 +1,6 @@
 // src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
-// We will create these components in the next steps
 import DashboardView from '../views/DashboardView.vue'
-import LocationDetailView from '../views/LocationDetailView.vue'
-import LocationsView from '../views/LocationsView.vue'
-import AllItemsView from '../views/AllItemsView.vue'
-import TodoView from '../views/TodoView.vue'
-import LoginView from '../views/LoginView.vue'
-import ShoppingListView from '../views/ShoppingListView.vue'
-import RecipesView from '../views/RecipesView.vue'
-import RecipeDetailView from '../views/RecipeDetailView.vue'
-import FinanceView from '../views/FinanceView.vue'
-import ForgotPasswordView from '../views/ForgotPasswordView.vue'
-import UpdatePasswordView from '../views/UpdatePasswordView.vue'
-import ScannerAddView from '../views/ScannerAddView.vue'
-import SettingsView from '../views/SettingsView.vue'
-import InviteAcceptView from '../views/InviteAcceptView.vue'
-import AuthCallbackView from '../views/AuthCallbackView.vue'
 import { useAuth } from '../composables/useAuth'
 import { watch } from 'vue'
 
@@ -26,7 +10,8 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: LoginView
+      meta: { layout: 'bare' },
+      component: () => import('../views/LoginView.vue'),
     },
     {
       // OAuth landing page — Supabase auto-exchanges the ?code= param into a
@@ -34,84 +19,87 @@ const router = createRouter({
       // for the session and forwards to the stashed redirect target.
       path: '/auth/callback',
       name: 'authCallback',
-      component: AuthCallbackView,
+      meta: { layout: 'bare' },
+      component: () => import('../views/AuthCallbackView.vue'),
     },
     {
       path: '/forgot-password',
       name: 'forgotPassword',
-      component: ForgotPasswordView
+      meta: { layout: 'bare' },
+      component: () => import('../views/ForgotPasswordView.vue')
     },
     {
       path: '/update-password',
       name: 'updatePassword',
-      component: UpdatePasswordView
+      meta: { layout: 'bare' },
+      component: () => import('../views/UpdatePasswordView.vue')
     },
     {
       path: '/',
       name: 'dashboard',
-      component: DashboardView, // Zeigt jetzt das Chart-Dashboard
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Übersicht', tab: 'dashboard' },
+      component: DashboardView,
     },
     {
       path: '/locations', // Neue Route für die Kacheln
       name: 'locations',
-      component: LocationsView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Vorräte', tab: 'inventory' },
+      component: () => import('../views/LocationsView.vue'),
     },
     {
       path: '/scanner',
       name: 'scanner',
-      component: ScannerAddView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Barcode scannen', tab: 'inventory', back: 'locations' },
+      component: () => import('../views/ScannerAddView.vue'),
     },
     {
       path: '/location/:id',
       name: 'location',
-      component: LocationDetailView,
+      meta: { requiresAuth: true, title: 'Vorräte', tab: 'inventory', back: 'locations' },
+      component: () => import('../views/LocationDetailView.vue'),
       props: true,
-      meta: { requiresAuth: true }
     },
     {
       path: '/items',
       name: 'allItems',
-      component: AllItemsView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Alle Vorräte', tab: 'inventory', back: 'locations' },
+      component: () => import('../views/AllItemsView.vue'),
     },
     {
       path: '/todos',
       name: 'todos',
-      component: TodoView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Aufgaben', tab: 'more' },
+      component: () => import('../views/TodoView.vue'),
     },
     {
       path: '/shopping-list',
       name: 'shoppingList',
-      component: ShoppingListView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Einkaufsliste', tab: 'shopping' },
+      component: () => import('../views/ShoppingListView.vue'),
     },
     {
       path: '/recipes',
       name: 'recipes',
-      component: RecipesView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Rezepte', tab: 'more' },
+      component: () => import('../views/RecipesView.vue'),
     },
     {
       path: '/recipes/:id',
       name: 'recipe-detail',
-      component: RecipeDetailView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Rezept', tab: 'more', back: 'recipes' },
+      component: () => import('../views/RecipeDetailView.vue'),
     },
     {
       path: '/finance',
       name: 'finance',
-      component: FinanceView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Finanzen', tab: 'finance' },
+      component: () => import('../views/FinanceView.vue'),
     },
     {
       path: '/settings',
       name: 'settings',
-      component: SettingsView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, title: 'Einstellungen', tab: 'more' },
+      component: () => import('../views/SettingsView.vue'),
     },
     {
       // Public route — the view itself bounces unauthenticated visitors to
@@ -119,10 +107,20 @@ const router = createRouter({
       // don't have an account yet.
       path: '/join/:token',
       name: 'invite-accept',
-      component: InviteAcceptView,
+      meta: { layout: 'bare' },
+      component: () => import('../views/InviteAcceptView.vue'),
       props: true,
-    }
-  ]
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: { name: 'dashboard' },
+    },
+  ],
+  scrollBehavior(to, _from, saved) {
+    if (saved) return saved
+    if (to.hash) return { el: to.hash }
+    return { top: 0 }
+  },
 })
 
 // Navigation Guard

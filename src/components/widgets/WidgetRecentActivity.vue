@@ -1,73 +1,80 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useInventory } from '../../composables/useInventory';
-import type { ActivityKind } from '../../composables/useInventory';
+import { useActivity, ACTIVITY_VERB, type ActivityKind } from '../../composables/useActivity';
+import { useActiveMembers } from '../../composables/useHouseholdMembers';
+import { useAuth } from '../../composables/useAuth';
 import WidgetShell from './WidgetShell.vue';
-import {
-  ClockIcon,
-  PlusCircleIcon,
-  BeakerIcon,
-  MinusCircleIcon,
-  TrashIcon,
-} from '@heroicons/vue/24/outline';
+import UserAvatar from '../ui/UserAvatar.vue';
+import { ClockIcon } from '@heroicons/vue/24/outline';
 
-const { recentActivity } = useInventory();
+const { entries, loading } = useActivity();
+const { memberById } = useActiveMembers();
+const { user } = useAuth();
 
-const entries = computed(() => recentActivity.value.slice(0, 5));
-
-const iconFor = (kind: ActivityKind) => {
-  switch (kind) {
-    case 'added': return PlusCircleIcon;
-    case 'opened': return BeakerIcon;
-    case 'consumed': return MinusCircleIcon;
-    case 'removed': return TrashIcon;
+// Collapse bursts („Joghurt hinzugefügt“ ×3 within a few minutes) into one line.
+const shown = computed(() => {
+  const out: (typeof entries.value[number] & { times: number })[] = [];
+  for (const e of entries.value) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      prev.kind === e.kind &&
+      prev.subject === e.subject &&
+      prev.actor_id === e.actor_id &&
+      Math.abs(new Date(prev.created_at).getTime() - new Date(e.created_at).getTime()) < 10 * 60_000
+    ) {
+      prev.times++;
+      continue;
+    }
+    out.push({ ...e, times: 1 });
+    if (out.length >= 5) break;
   }
+  return out;
+});
+
+const EMOJI: Record<ActivityKind, string> = {
+  added: '➕',
+  opened: '🥄',
+  consumed: '➖',
+  removed: '🗑️',
+  bought: '🛒',
+  todo_done: '✅',
 };
 
-const colorFor = (kind: ActivityKind) => {
-  switch (kind) {
-    case 'added': return 'text-success';
-    case 'opened': return 'text-info';
-    case 'consumed': return 'text-warning';
-    case 'removed': return 'text-error';
-  }
-};
-
-const labelFor = (kind: ActivityKind) => {
-  switch (kind) {
-    case 'added': return 'Hinzugefügt';
-    case 'opened': return 'Geöffnet';
-    case 'consumed': return 'Verbraucht';
-    case 'removed': return 'Entfernt';
-  }
+const actorName = (id: string | null) => {
+  if (!id) return 'Jemand';
+  if (id === user.value?.id) return 'Du';
+  return memberById(id)?.display_name ?? 'Jemand';
 };
 
 const relativeTime = (iso: string) => {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diffMs / 60000);
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (m < 1) return 'gerade eben';
-  if (m < 60) return `vor ${m} Min`;
+  if (m < 60) return `vor ${m} Min.`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `vor ${h} Std`;
+  if (h < 24) return `vor ${h} Std.`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `vor ${d} ${d === 1 ? 'Tag' : 'Tagen'}`;
+  if (d < 7) return d === 1 ? 'gestern' : `vor ${d} Tagen`;
   return new Date(iso).toLocaleDateString('de-DE');
 };
 </script>
 
 <template>
-  <WidgetShell title="Letzte Aktivität" :icon="ClockIcon" tone="info">
-    <div v-if="entries.length === 0" class="text-sm text-base-content/40 py-4 text-center">
-      Noch keine Aktivität.
+  <WidgetShell title="Was zuletzt passiert ist" :icon="ClockIcon" tone="info" :loading="loading && entries.length === 0">
+    <div v-if="shown.length === 0" class="text-sm text-base-content/50 py-2">
+      Sobald jemand im Haushalt etwas einräumt, abhakt oder verbraucht, steht es hier.
     </div>
-    <ul v-else class="flex flex-col divide-y divide-base-200">
-      <li v-for="(e, i) in entries" :key="i" class="flex items-center gap-3 py-2">
-        <component :is="iconFor(e.kind)" class="h-5 w-5 shrink-0" :class="colorFor(e.kind)" />
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium truncate">{{ e.item_name }}</div>
-          <div class="text-xs text-base-content/50">{{ labelFor(e.kind) }}</div>
+    <ul v-else class="flex flex-col -my-1">
+      <li v-for="e in shown" :key="e.id" class="flex items-center gap-3 py-1.5">
+        <span class="relative shrink-0">
+          <UserAvatar :name="actorName(e.actor_id)" :src="memberById(e.actor_id)?.avatar_url" size="sm" />
+          <span class="absolute -bottom-1 -right-1 text-[11px]" aria-hidden="true">{{ EMOJI[e.kind] }}</span>
+        </span>
+        <div class="flex-1 min-w-0 text-sm leading-snug">
+          <span class="font-semibold">{{ actorName(e.actor_id) }}</span>
+          hat <span class="font-medium">{{ e.subject }}</span> {{ ACTIVITY_VERB[e.kind] }}<span v-if="e.times > 1" class="text-base-content/50"> ({{ e.times }}×)</span>
         </div>
-        <div class="text-xs text-base-content/40 tabular-nums shrink-0">{{ relativeTime(e.at) }}</div>
+        <span class="text-xs text-base-content/45 tabular-nums shrink-0">{{ relativeTime(e.created_at) }}</span>
       </li>
     </ul>
   </WidgetShell>

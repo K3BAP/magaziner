@@ -1,117 +1,150 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useInventory, type Location } from '../composables/useInventory';
+import { useInventory, itemExpiryStatus, isBelowMinimum, type Location } from '../composables/useInventory';
+import LocationSheet from '../components/inventory/LocationSheet.vue';
+import ItemFormSheet from '../components/inventory/ItemFormSheet.vue';
+import AppFab from '../components/ui/AppFab.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
+import { MagnifyingGlassIcon, QrCodeIcon, PlusIcon, EllipsisHorizontalIcon } from '@heroicons/vue/24/outline';
 
-const { locations, addLocation, updateLocation, deleteLocation } = useInventory();
 const router = useRouter();
+const { locations, items, loading, loaded } = useInventory();
 
-// --- Navigation ---
-const openLocation = (loc: Location) => {
-  router.push({ name: 'location', params: { id: loc.id } });
-};
+const sheetOpen = ref(false);
+const editing = ref<Location | null>(null);
+const addOpen = ref(false);
 
-// --- Modal Logic (Add/Edit Location) ---
-const addLocationDialog = ref<HTMLDialogElement | null>(null);
-const editingLocationId = ref<string | null>(null);
-const newLocName = ref('');
-const newLocIcon = ref('📦');
-const availableIcons = ['❄️', '🥫', '📦', '🧹', '🛁', '💊', '🍷', '🥖', '🍎', '🥩', '🧊', '🧺'];
-
-const openAddLocationModal = () => {
-  editingLocationId.value = null;
-  newLocName.value = '';
-  newLocIcon.value = '📦';
-  addLocationDialog.value?.showModal();
-};
-
-const openEditLocationModal = (loc: Location, event: Event) => {
-  event.stopPropagation();
-  editingLocationId.value = loc.id;
-  newLocName.value = loc.name;
-  newLocIcon.value = loc.icon || '📦';
-  addLocationDialog.value?.showModal();
-};
-
-const saveNewLocation = async () => {
-  if (!newLocName.value) return;
-  if (editingLocationId.value) {
-    await updateLocation(editingLocationId.value, newLocName.value, newLocIcon.value);
-  } else {
-    await addLocation(newLocName.value, newLocIcon.value);
+const statsFor = (locId: string) => {
+  const locItems = items.value.filter((i) => i.location_id === locId);
+  let expired = 0;
+  let soon = 0;
+  for (const it of locItems) {
+    const s = itemExpiryStatus(it);
+    if (s === 'expired') expired++;
+    else if (s === 'soon') soon++;
   }
-  addLocationDialog.value?.close();
+  return { count: locItems.length, expired, soon };
 };
 
-const initiateDeleteLocation = async () => {
-  if (!editingLocationId.value) return;
-  if (!confirm('Ort wirklich löschen? Alle enthaltenen Produkte werden ebenfalls gelöscht.')) return;
-  
-  await deleteLocation(editingLocationId.value);
-  addLocationDialog.value?.close();
+const summary = computed(() => {
+  let expired = 0;
+  let soon = 0;
+  let opened = 0;
+  let low = 0;
+  for (const it of items.value) {
+    const s = itemExpiryStatus(it);
+    if (s === 'expired') expired++;
+    else if (s === 'soon') soon++;
+    if (it.instances.some((i) => i.opened_at)) opened++;
+    if (isBelowMinimum(it)) low++;
+  }
+  return [
+    { key: 'expired', label: 'abgelaufen', n: expired, tone: 'bg-error/12 text-error' },
+    { key: 'soon', label: 'bald fällig', n: soon, tone: 'bg-warning/15 text-warning-content dark:text-warning' },
+    { key: 'opened', label: 'geöffnet', n: opened, tone: 'bg-info/12 text-info' },
+    { key: 'low', label: 'knapp', n: low, tone: 'bg-accent/12 text-accent' },
+  ].filter((s) => s.n > 0);
+});
+
+const openNew = () => {
+  editing.value = null;
+  sheetOpen.value = true;
+};
+const openEdit = (loc: Location) => {
+  editing.value = loc;
+  sheetOpen.value = true;
 };
 </script>
 
 <template>
-  <div class="grid grid-cols-2 gap-4">
-    <div 
-      v-for="loc in locations" 
-      :key="loc.id" 
-      @click="openLocation(loc)"
-      class="card bg-base-100 shadow-md hover:shadow-lg cursor-pointer active:scale-95 transition-transform relative group"
-    >
-      <div class="card-body items-center text-center p-6">
-        <div class="text-4xl mb-2">{{ loc.icon || '📦' }}</div>
-        <h2 class="card-title text-base">{{ loc.name }}</h2>
-      </div>
+  <div>
+    <Teleport to="#header-actions" defer>
+      <RouterLink :to="{ name: 'allItems' }" class="btn btn-ghost btn-circle" aria-label="Produkte suchen" title="Suchen">
+        <MagnifyingGlassIcon class="h-6 w-6" />
+      </RouterLink>
+      <RouterLink :to="{ name: 'scanner' }" class="btn btn-ghost btn-circle" aria-label="Barcode scannen" title="Scannen">
+        <QrCodeIcon class="h-6 w-6" />
+      </RouterLink>
+    </Teleport>
 
-      <button 
-        @click="(e) => openEditLocationModal(loc, e)"
-        class="btn btn-xs btn-circle btn-ghost absolute top-2 right-2 opacity-50 hover:opacity-100 bg-base-200/50 hover:bg-base-300 border-none"
+    <div v-if="summary.length" class="flex flex-wrap gap-2 mb-4">
+      <RouterLink
+        v-for="s in summary"
+        :key="s.key"
+        :to="{ name: 'allItems', query: { filter: s.key } }"
+        class="pressable rounded-full px-3 py-1.5 text-sm font-semibold"
+        :class="s.tone"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-      </button>
+        {{ s.n }} {{ s.label }}
+      </RouterLink>
     </div>
 
-    <button 
-      @click="openAddLocationModal"
-      class="card border-2 border-dashed border-base-300 bg-base-100/50 hover:bg-base-100 flex items-center justify-center p-6 cursor-pointer h-full min-h-[140px]"
-    >
-      <div class="text-center text-base-content/60">
-        <div class="text-3xl mb-1">+</div>
-        <div class="font-medium">Ort hinzufügen</div>
-      </div>
-    </button>
-
-    <dialog ref="addLocationDialog" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg mb-4">
-          {{ editingLocationId ? 'Ort bearbeiten' : 'Neuen Ort erstellen' }}
-        </h3>
-        <div class="form-control w-full mb-4">
-          <input v-model="newLocName" type="text" placeholder="Name" class="input input-bordered w-full" @keyup.enter="saveNewLocation"/>
-        </div>
-        <div class="grid grid-cols-6 gap-2 mb-6">
-          <button v-for="icon in availableIcons" :key="icon" @click="newLocIcon = icon" class="btn btn-square text-xl" :class="newLocIcon === icon ? 'btn-primary' : 'btn-ghost bg-base-200'" type="button">{{ icon }}</button>
-        </div>
-        <div class="modal-action justify-between">
-          <div>
-            <button v-if="editingLocationId" @click="initiateDeleteLocation" class="btn btn-ghost text-error hover:bg-error/10">Löschen</button>
-          </div>
-          <div class="flex gap-2">
-            <form method="dialog"><button class="btn btn-ghost">Abbrechen</button></form>
-            <button @click="saveNewLocation" class="btn btn-primary">{{ editingLocationId ? 'Speichern' : 'Erstellen' }}</button>
-          </div>
-        </div>
-      </div>
-    </dialog>
-
-    <div class="fixed bottom-6 right-6 z-20">
-      <button @click="router.push({ name: 'scanner' })" class="btn btn-circle btn-primary btn-lg shadow-xl" title="Barcode scannen">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-        </svg>
-      </button>
+    <div v-if="loading && !loaded" class="grid grid-cols-2 gap-3">
+      <div v-for="i in 4" :key="i" class="skeleton h-32 rounded-[1.25rem]" />
     </div>
+
+    <template v-else>
+      <EmptyState
+        v-if="locations.length === 0"
+        icon="🧺"
+        title="Noch keine Lagerorte"
+        text="Lege Orte wie „Kühlschrank“, „Vorratsschrank“ oder „Bad“ an und räume deine Produkte ein."
+      >
+        <button type="button" class="btn btn-primary gap-2" @click="openNew"><PlusIcon class="h-5 w-5" /> Ersten Ort anlegen</button>
+      </EmptyState>
+
+      <div v-else class="grid grid-cols-2 gap-3">
+        <div
+          v-for="loc in locations"
+          :key="loc.id"
+          role="link"
+          tabindex="0"
+          class="surface pressable relative p-4 flex flex-col gap-3 min-h-32 cursor-pointer"
+          @click="router.push({ name: 'location', params: { id: loc.id } })"
+          @keydown.enter="router.push({ name: 'location', params: { id: loc.id } })"
+        >
+          <div class="flex items-start justify-between">
+            <span class="h-12 w-12 rounded-2xl bg-base-200 flex items-center justify-center text-2xl">{{ loc.icon || '📦' }}</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-circle -mr-2 -mt-1 text-base-content/50"
+              :aria-label="`${loc.name} bearbeiten`"
+              @click.stop="openEdit(loc)"
+            >
+              <EllipsisHorizontalIcon class="h-5 w-5" />
+            </button>
+          </div>
+          <div class="min-w-0">
+            <div class="font-semibold truncate">{{ loc.name }}</div>
+            <div class="flex items-center gap-2 text-xs text-base-content/55 mt-0.5">
+              <span>{{ statsFor(loc.id).count }} {{ statsFor(loc.id).count === 1 ? 'Produkt' : 'Produkte' }}</span>
+              <span v-if="statsFor(loc.id).expired" class="flex items-center gap-1 text-error font-semibold">
+                <span class="h-1.5 w-1.5 rounded-full bg-error" />{{ statsFor(loc.id).expired }}
+              </span>
+              <span v-if="statsFor(loc.id).soon" class="flex items-center gap-1 text-warning font-semibold">
+                <span class="h-1.5 w-1.5 rounded-full bg-warning" />{{ statsFor(loc.id).soon }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="pressable rounded-[1.25rem] border-2 border-dashed border-base-content/15 flex flex-col items-center justify-center gap-1 min-h-32 text-base-content/55"
+          @click="openNew"
+        >
+          <PlusIcon class="h-7 w-7" />
+          <span class="font-medium text-sm">Ort hinzufügen</span>
+        </button>
+      </div>
+    </template>
+
+    <AppFab v-if="locations.length > 0" label="Produkt" extended @click="addOpen = true">
+      <PlusIcon class="h-6 w-6" />
+    </AppFab>
+
+    <LocationSheet :open="sheetOpen" :location="editing" @close="sheetOpen = false" />
+    <ItemFormSheet :open="addOpen" @close="addOpen = false" />
   </div>
 </template>

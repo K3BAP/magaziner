@@ -4,6 +4,7 @@ import { useInventory } from '../../composables/useInventory';
 import { useDashboard } from '../../composables/useDashboard';
 import type { WidgetType } from '../../composables/useDashboard';
 import { XMarkIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import { normalize } from '../../utils/text';
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -26,9 +27,10 @@ const SECTIONS: { heading: string; entries: CatalogEntry[] }[] = [
       { type: 'expired', emoji: '⚠️', title: 'Abgelaufen', description: 'Anzahl überfälliger Produkte.' },
       { type: 'soon', emoji: '⏳', title: 'Bald fällig', description: 'In den nächsten 14 Tagen.' },
       { type: 'opened', emoji: '🧪', title: 'Geöffnet', description: 'Angebrochene Produkte.' },
+      { type: 'low-stock', emoji: '📉', title: 'Knapp', description: 'Produkte unter Mindestbestand.' },
       { type: 'inventory-chart', emoji: '📊', title: 'Zustand', description: 'Torte: OK / fällig / abgelaufen.' },
       { type: 'location-chart', emoji: '📍', title: 'Orte', description: 'Balken: Produkte pro Ort.' },
-      { type: 'recent-activity', emoji: '🕒', title: 'Letzte Aktivität', description: 'Was zuletzt passiert ist.' },
+      { type: 'recent-activity', emoji: '🕒', title: 'Letzte Aktivität', description: 'Wer im Haushalt was gemacht hat.' },
     ],
   },
   {
@@ -37,7 +39,7 @@ const SECTIONS: { heading: string; entries: CatalogEntry[] }[] = [
       { type: 'quick-add', emoji: '⚡', title: 'Schnell hinzufügen', description: 'Vorrat aufstocken ohne Umwege.' },
       { type: 'quick-expense', emoji: '💸', title: 'Neue Ausgabe', description: 'Ausgabe direkt im Schritt-Dialog erfassen.' },
       { type: 'todos', emoji: '✅', title: 'Aufgaben', description: 'Offene Todos im Blick.' },
-      { type: 'shopping-list', emoji: '🛒', title: 'Einkaufsliste', description: 'Anzahl offener Einträge.' },
+      { type: 'shopping-list', emoji: '🛒', title: 'Einkaufsliste', description: 'Offene Einträge mit Vorschau.' },
       { type: 'finance-snapshot', emoji: '💶', title: 'Finanzen', description: 'Ausgaben des Monats.' },
     ],
   },
@@ -63,9 +65,9 @@ const pickerMode = ref<'product' | 'shortcut' | null>(null);
 const productQuery = ref('');
 
 const filteredProducts = computed(() => {
-  const q = productQuery.value.trim().toLowerCase();
+  const q = normalize(productQuery.value);
   if (!q) return items.value.slice(0, 30);
-  return items.value.filter(i => i.name.toLowerCase().includes(q)).slice(0, 30);
+  return items.value.filter(i => normalize(i.name).includes(q)).slice(0, 30);
 });
 
 const close = () => {
@@ -143,14 +145,14 @@ const onSheetAfterLeave = () => {
   <Teleport to="body">
     <!-- Backdrop fade -->
     <Transition name="backdrop">
-      <div v-if="props.open" class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" @click="close" />
+      <div v-if="props.open" class="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm" @click="close" />
     </Transition>
 
     <!-- Sheet slide-up -->
     <Transition name="sheet" @after-leave="onSheetAfterLeave">
       <div
         v-if="props.open"
-        class="fixed inset-x-0 bottom-0 z-50 sm:inset-0 sm:flex sm:items-center sm:justify-center pointer-events-none"
+        class="fixed inset-x-0 bottom-0 z-[60] sm:inset-0 sm:flex sm:items-center sm:justify-center pointer-events-none"
       >
         <div
           class="sheet-box pointer-events-auto bg-base-100 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden mx-auto"

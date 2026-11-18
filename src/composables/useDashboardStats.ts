@@ -1,48 +1,36 @@
 import { computed } from 'vue';
-import { useInventory } from './useInventory';
+import { useInventory, itemExpiryStatus, isBelowMinimum } from './useInventory';
+import { expiryStatus } from '../utils/date';
 
+/**
+ * Inventory counters for the dashboard. Counted per *product* (not per
+ * package) so the numbers match the filters on the „Alle Vorräte“ page.
+ */
 export function useDashboardStats() {
-    const { items } = useInventory();
+  const { items } = useInventory();
 
-    const getExpiryStatus = (dateStr: string | null) => {
-        if (!dateStr) return 'ok';
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const expiry = new Date(dateStr);
-        const diffTime = expiry.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (86400000));
+  const stats = computed(() => {
+    let expired = 0;
+    let soon = 0;
+    let ok = 0;
+    let opened = 0;
+    let low = 0;
+    for (const item of items.value) {
+      const s = itemExpiryStatus(item);
+      if (s === 'expired') expired++;
+      else if (s === 'soon') soon++;
+      else ok++;
+      if (item.instances.some((i) => i.opened_at)) opened++;
+      if (isBelowMinimum(item)) low++;
+    }
+    return { expired, soon, ok, opened, low };
+  });
 
-        if (diffDays < 0) return 'expired';
-        if (diffDays <= 14) return 'soon';
-        return 'ok';
-    };
+  /** @deprecated use expiryStatus from utils/date */
+  const getExpiryStatus = (dateStr: string | null) => {
+    const s = expiryStatus(dateStr);
+    return s === 'none' ? 'ok' : s;
+  };
 
-    const stats = computed(() => {
-        let expired = 0;
-        let soon = 0;
-        let ok = 0;
-        let opened = 0;
-
-        items.value.forEach(item => {
-            if (item.instances && item.instances.length > 0) {
-                item.instances.forEach(inst => {
-                    // Status prüfen (MHD)
-                    const status = getExpiryStatus(inst.expiry_date);
-                    if (status === 'expired') expired++;
-                    else if (status === 'soon') soon++;
-                    else ok++;
-
-                    // Status prüfen (Geöffnet)
-                    if (inst.opened_at) opened++;
-                });
-            } else {
-                ok++;
-            }
-        });
-        return { expired, soon, ok, opened };
-    });
-
-    return {
-        stats,
-        getExpiryStatus
-    };
+  return { stats, getExpiryStatus };
 }

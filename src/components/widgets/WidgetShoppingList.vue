@@ -1,45 +1,31 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { supabase } from '../../supabase';
+import { computed } from 'vue';
+import { useShoppingList } from '../../composables/useShoppingList';
+import { useShoppingLists } from '../../composables/useShoppingLists';
 import { ShoppingCartIcon } from '@heroicons/vue/24/outline';
 import WidgetShell from './WidgetShell.vue';
 
-// Self-contained household-wide count of open entries across all lists. Kept
-// independent of useShoppingList (whose state is scoped to the active list).
-const itemCount = ref(0);
-const loading = ref(false);
+const { items, loading } = useShoppingList();
+const { activeList } = useShoppingLists();
 
-const fetchCount = async () => {
-  try {
-    loading.value = true;
-    const { count, error } = await supabase
-      .from('shopping_list')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_completed', false);
-    if (error) throw error;
-    itemCount.value = count ?? 0;
-  } catch (error) {
-    console.error('Fehler beim Laden der Einkaufslisten-Anzahl:', error);
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(fetchCount);
+const open = computed(() => items.value.filter((i) => !i.is_completed));
+const preview = computed(() => open.value.slice(0, 2));
 </script>
 
 <template>
-  <WidgetShell
-    title="Einkaufsliste"
-    :icon="ShoppingCartIcon"
-    tone="accent"
-    :clickable="true"
-    :loading="loading"
-    align="center"
-  >
-    <div class="flex-1 flex flex-col items-center justify-center w-full">
-      <div class="text-5xl font-bold tabular-nums text-accent leading-none">{{ itemCount }}</div>
-      <div class="text-xs text-base-content/50 mt-2">offen</div>
-    </div>
+  <WidgetShell :title="activeList?.name ?? 'Einkaufsliste'" :icon="ShoppingCartIcon" tone="accent" clickable :loading="loading && items.length === 0">
+    <template v-if="open.length > 0">
+      <div class="flex items-baseline gap-1.5">
+        <span class="font-display text-4xl tabular-nums leading-none text-accent">{{ open.length }}</span>
+        <span class="text-xs text-base-content/55">offen</span>
+      </div>
+      <ul class="mt-3 flex flex-col gap-1">
+        <li v-for="i in preview" :key="i.id" class="text-sm truncate flex items-center gap-1.5">
+          <span class="h-1.5 w-1.5 rounded-full bg-accent/50 shrink-0" />
+          <span class="truncate">{{ i.title }}</span>
+        </li>
+      </ul>
+    </template>
+    <div v-else class="mt-auto text-sm text-base-content/50">Nichts zu kaufen</div>
   </WidgetShell>
 </template>

@@ -15,10 +15,16 @@
  * Idempotent singleton.
  */
 
+import { ref } from 'vue';
+
 let initialized = false;
+
+/** True while the on-screen keyboard covers part of the page. */
+export const keyboardOpen = ref(false);
 
 function setInset(px: number) {
   const v = Math.max(0, Math.round(px || 0));
+  keyboardOpen.value = v > 80;
   document.documentElement.style.setProperty('--keyboard-inset', `${v}px`);
 }
 

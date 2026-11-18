@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import draggable from 'vuedraggable';
+import BottomSheet from '../ui/BottomSheet.vue';
+import { confirmDialog } from '../../composables/useConfirm';
+import { toast } from '../../composables/useToast';
 import { useShoppingLists, type ShoppingList } from '../../composables/useShoppingLists';
-import { Bars3Icon, PencilSquareIcon, TrashIcon, PlusIcon, XMarkIcon, CheckIcon } from '@heroicons/vue/24/outline';
+import { Bars3Icon, PencilSquareIcon, TrashIcon, PlusIcon, CheckIcon } from '@heroicons/vue/24/outline';
 
 defineEmits<{ (e: 'close'): void }>();
 
@@ -39,27 +42,30 @@ const handleAdd = async () => {
   newIcon.value = '';
 };
 
-const handleDelete = async (id: string) => {
+const handleDelete = async (list: ShoppingList) => {
+  const ok = await confirmDialog({
+    title: `„${list.name}“ löschen?`,
+    message: 'Alle Einträge dieser Liste werden mitgelöscht.',
+    confirmLabel: 'Löschen',
+    danger: true,
+  });
+  if (!ok) return;
   try {
-    await deleteList(id);
+    await deleteList(list.id);
+    toast.success('Liste gelöscht');
   } catch (e: any) {
-    alert(e?.message ?? 'Liste konnte nicht gelöscht werden.');
+    toast.error(e?.message ?? 'Liste konnte nicht gelöscht werden.');
   }
 };
 </script>
 
 <template>
-  <div class="modal modal-open modal-bottom sm:modal-middle" @click.self="$emit('close')">
-    <div class="modal-box">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-bold text-lg">Listen verwalten</h3>
-        <button class="btn btn-sm btn-ghost btn-circle" @click="$emit('close')"><XMarkIcon class="h-5 w-5" /></button>
-      </div>
+  <BottomSheet :open="true" title="Listen verwalten" @close="$emit('close')">
 
       <draggable v-model="draftOrder" item-key="id" handle=".drag-handle" :animation="200" tag="div" class="flex flex-col gap-2">
         <template #item="{ element: list }">
-          <div class="flex items-center gap-2 p-2 rounded-lg bg-base-200">
-            <button class="drag-handle btn btn-xs btn-circle btn-ghost cursor-grab active:cursor-grabbing" title="Verschieben">
+          <div class="flex items-center gap-2 p-2 rounded-2xl bg-base-200">
+            <button class="drag-handle btn btn-sm btn-circle btn-ghost touch-none cursor-grab active:cursor-grabbing" title="Verschieben">
               <Bars3Icon class="h-4 w-4" />
             </button>
 
@@ -70,12 +76,12 @@ const handleDelete = async (id: string) => {
             </template>
             <template v-else>
               <span class="flex-1 truncate"><span v-if="list.icon" class="mr-1">{{ list.icon }}</span>{{ list.name }}</span>
-              <button class="btn btn-xs btn-circle btn-ghost" title="Umbenennen" @click="startEdit(list)"><PencilSquareIcon class="h-4 w-4" /></button>
+              <button class="btn btn-sm btn-circle btn-ghost" title="Umbenennen" @click="startEdit(list)"><PencilSquareIcon class="h-4 w-4" /></button>
               <button
-                class="btn btn-xs btn-circle btn-ghost text-error"
+                class="btn btn-sm btn-circle btn-ghost text-error"
                 title="Löschen"
                 :disabled="lists.length <= 1"
-                @click="handleDelete(list.id)"
+                @click="handleDelete(list)"
               >
                 <TrashIcon class="h-4 w-4" />
               </button>
@@ -91,6 +97,5 @@ const handleDelete = async (id: string) => {
         <input v-model="newName" class="input input-bordered input-sm flex-1" placeholder="Neue Liste…" @keyup.enter="handleAdd" />
         <button class="btn btn-sm btn-primary btn-circle" :disabled="!newName.trim()" @click="handleAdd"><PlusIcon class="h-5 w-5" /></button>
       </div>
-    </div>
-  </div>
+  </BottomSheet>
 </template>

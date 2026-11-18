@@ -91,12 +91,62 @@ begin
     ('00000000-0000-4000-8000-000000000202', v_hh, v_list_b, v_household, 'Duschgel',  true,  v_now - interval '2 min'),
     ('00000000-0000-4000-8000-000000000203', v_hh, v_list_b, v_household, 'Klopapier', false, v_now - interval '3 min');
 
-  insert into public.todos (id, household_id, title, is_completed) values
-    ('00000000-0000-4000-8000-000000000301', v_hh, 'Bad putzen',       false),
-    ('00000000-0000-4000-8000-000000000302', v_hh, 'Müll rausbringen', true);
+  insert into public.todos (id, household_id, title, is_completed, due_date, recurrence, assignee_id) values
+    ('00000000-0000-4000-8000-000000000301', v_hh, 'Bad putzen',        false, null,               null,     null),
+    ('00000000-0000-4000-8000-000000000302', v_hh, 'Müll rausbringen',  true,  null,               'weekly', null),
+    ('00000000-0000-4000-8000-000000000303', v_hh, 'Pfand wegbringen',  false, current_date - 2,   null,     v_user),
+    ('00000000-0000-4000-8000-000000000304', v_hh, 'Blumen gießen',     false, current_date,       'weekly', null),
+    ('00000000-0000-4000-8000-000000000305', v_hh, 'Steuer vorbereiten', false, current_date + 10, null,     null);
+
+  -- Vorräte (2.0): Orte, Kategorien, Produkte mit allen Ablauf-Zuständen.
+  insert into public.locations (id, household_id, name, icon) values
+    ('00000000-0000-4000-8000-000000000401', v_hh, 'Kühlschrank',    '❄️'),
+    ('00000000-0000-4000-8000-000000000402', v_hh, 'Vorratsschrank', '🥫');
+
+  insert into public.categories (id, household_id, location_id, name) values
+    ('00000000-0000-4000-8000-000000000411', v_hh, '00000000-0000-4000-8000-000000000401', 'Milchprodukte');
+
+  insert into public.items (id, household_id, location_id, category_id, name, minimum_stock, barcode) values
+    ('00000000-0000-4000-8000-000000000501', v_hh, '00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000411', 'Joghurt',  2,    null),
+    ('00000000-0000-4000-8000-000000000502', v_hh, '00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000411', 'Käse',     null, null),
+    ('00000000-0000-4000-8000-000000000503', v_hh, '00000000-0000-4000-8000-000000000401', null,                                   'Senf',     null, null),
+    ('00000000-0000-4000-8000-000000000504', v_hh, '00000000-0000-4000-8000-000000000402', null,                                   'Müsli',    1,    '4000000000001'),
+    ('00000000-0000-4000-8000-000000000505', v_hh, '00000000-0000-4000-8000-000000000402', null,                                   'Tomaten (Dose)', 3, null);
+
+  insert into public.item_instances (id, household_id, item_id, quantity, expiry_date, opened_at) values
+    ('00000000-0000-4000-8000-000000000601', v_hh, '00000000-0000-4000-8000-000000000501', 1, current_date - 1,  null),
+    ('00000000-0000-4000-8000-000000000602', v_hh, '00000000-0000-4000-8000-000000000501', 2, current_date + 5,  null),
+    ('00000000-0000-4000-8000-000000000603', v_hh, '00000000-0000-4000-8000-000000000502', 1, current_date + 30, current_date - 3),
+    ('00000000-0000-4000-8000-000000000604', v_hh, '00000000-0000-4000-8000-000000000503', 1, null,              current_date - 20),
+    ('00000000-0000-4000-8000-000000000605', v_hh, '00000000-0000-4000-8000-000000000504', 1, current_date + 90, null),
+    ('00000000-0000-4000-8000-000000000606', v_hh, '00000000-0000-4000-8000-000000000505', 2, current_date + 400, null);
+
+  -- Finanzen (2.0): zwei Personen, Kategorien, eine Ausgabe, eine Zahlung.
+  insert into public.finance_members (id, household_id, name) values
+    ('00000000-0000-4000-8000-000000000701', v_hh, 'Testnutzer'),
+    ('00000000-0000-4000-8000-000000000702', v_hh, 'Mitbewohner');
+
+  insert into public.finance_categories (id, household_id, name, icon) values
+    ('00000000-0000-4000-8000-000000000711', v_hh, 'Lebensmittel', '🍎'),
+    ('00000000-0000-4000-8000-000000000712', v_hh, 'Wohnen',       '🏠');
+
+  insert into public.finance_transactions (id, household_id, type, title, amount, payer_id, receiver_id, category_id, date) values
+    ('00000000-0000-4000-8000-000000000801', v_hh, 'expense', 'Wocheneinkauf Rewe', 60.00, '00000000-0000-4000-8000-000000000701', null, '00000000-0000-4000-8000-000000000711', current_date - 1),
+    ('00000000-0000-4000-8000-000000000802', v_hh, 'payment', null,                 10.00, '00000000-0000-4000-8000-000000000702', '00000000-0000-4000-8000-000000000701', null, current_date);
+
+  insert into public.finance_splits (id, transaction_id, member_id, split_amount, split_percentage) values
+    ('00000000-0000-4000-8000-000000000811', '00000000-0000-4000-8000-000000000801', '00000000-0000-4000-8000-000000000701', 30.00, 50),
+    ('00000000-0000-4000-8000-000000000812', '00000000-0000-4000-8000-000000000801', '00000000-0000-4000-8000-000000000702', 30.00, 50);
+
+  insert into public.recipes (id, household_id, name, description, servings, ingredients) values
+    ('00000000-0000-4000-8000-000000000901', v_hh, 'Tomatensoße',
+     E'## Zubereitung\n1. Zwiebeln anschwitzen\n2. Tomaten dazu, **20 Minuten** köcheln.\n\n<img src=x onerror="alert(1)">',
+     2,
+     '[{"id":"i1","name":"Tomaten (Dose)","quantity":"2 Dosen"},{"id":"i2","name":"Zwiebel","quantity":"1"},{"id":"i3","name":"Olivenöl","quantity":"2 EL"}]'::jsonb);
 end $$;
 
--- Startzustand zur Kontrolle.
+-- Startzustand zur Kontrolle. (Die Rezeptbeschreibung enthält absichtlich ein
+-- <img onerror>, um die HTML-Bereinigung zu prüfen.)
 select
   l.name                                        as liste,
   count(*)                                      as eintraege,

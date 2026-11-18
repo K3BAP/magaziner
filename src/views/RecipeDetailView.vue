@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useRecipes, type Recipe, type Ingredient } from '../composables/useRecipes';
 import { useShoppingList } from '../composables/useShoppingList';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 const route = useRoute();
 const router = useRouter();
@@ -42,7 +43,8 @@ const loadRecipe = async () => {
 
 const parsedDescription = computed(() => {
   if (!recipe.value?.description) return '';
-  return marked.parse(recipe.value.description);
+  // Recipes are shared with every household member: never trust the HTML.
+  return DOMPurify.sanitize(marked.parse(recipe.value.description, { async: false }) as string);
 });
 
 onMounted(() => {

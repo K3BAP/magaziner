@@ -6,6 +6,7 @@ export interface UserProfile {
   display_name: string;
   avatar_url: string | null;
   active_household_id: string | null;
+  dashboard_layout?: unknown | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,7 +35,7 @@ export function useProfile() {
     }
   };
 
-  const updateProfile = async (patch: Partial<Pick<UserProfile, 'display_name' | 'avatar_url' | 'active_household_id'>>) => {
+  const updateProfile = async (patch: Partial<Pick<UserProfile, 'display_name' | 'avatar_url' | 'active_household_id' | 'dashboard_layout'>>) => {
     if (!profile.value) return;
 
     const prev = { ...profile.value };

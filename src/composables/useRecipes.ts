@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { supabase } from '../supabase';
-import { useActiveHousehold } from './useActiveHousehold';
+import { useActiveHousehold, householdSnapshot } from './useActiveHousehold';
+import { toast } from './useToast';
 
 export interface Ingredient {
     id: string;
@@ -28,15 +29,17 @@ export function useRecipes() {
     const fetchRecipes = async () => {
         try {
             loading.value = true;
+      const isCurrent = householdSnapshot();
             const { data, error } = await supabase
                 .from('recipes')
                 .select('*')
                 .order('created_at', { ascending: false });
 
+            if (!isCurrent()) return;
             if (error) throw error;
             recipes.value = data || [];
         } catch (error) {
-            console.error('Fehler beim Laden der Rezepte:', error);
+            toast.error('Fehler beim Laden der Rezepte.', error);
         } finally {
             loading.value = false;
         }
@@ -51,7 +54,7 @@ export function useRecipes() {
             .single();
 
         if (error) {
-            console.error('Fehler beim Laden des Rezepts:', error);
+            toast.error('Fehler beim Laden des Rezepts.', error);
             return null;
         }
         return data;
@@ -98,7 +101,7 @@ export function useRecipes() {
             .eq('id', id);
 
         if (error) {
-            console.error('Fehler beim Speichern:', error);
+            toast.error('Fehler beim Speichern.', error);
             // Rollback
             if (oldRecipe && index !== -1) {
                 recipes.value[index] = oldRecipe;

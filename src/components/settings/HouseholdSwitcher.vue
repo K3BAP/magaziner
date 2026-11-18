@@ -472,7 +472,7 @@ watch(households, (list) => {
               class="mt-2 p-3 rounded-lg border border-error/40 bg-error/5 flex flex-col gap-2"
             >
               <div class="text-sm">
-                <strong>{{ membersByHousehold[h.id]?.find(mm => mm.user_id === confirmingKick.userId)?.display_name }}</strong>
+                <strong>{{ membersByHousehold[h.id]?.find(mm => mm.user_id === confirmingKick?.userId)?.display_name }}</strong>
                 wirklich aus dem Haushalt entfernen?
               </div>
               <div class="flex justify-end gap-2">
@@ -494,7 +494,7 @@ watch(households, (list) => {
             >
               <div class="text-sm">
                 Inhaberschaft an
-                <strong>{{ membersByHousehold[h.id]?.find(mm => mm.user_id === confirmingTransfer.userId)?.display_name }}</strong>
+                <strong>{{ membersByHousehold[h.id]?.find(mm => mm.user_id === confirmingTransfer?.userId)?.display_name }}</strong>
                 übertragen?
                 <div class="text-xs text-base-content/70 mt-1">
                   Du wirst danach selbst nur noch Mitglied und kannst den Haushalt nicht mehr löschen oder umbenennen.

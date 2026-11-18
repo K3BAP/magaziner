@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import draggable from 'vuedraggable';
+import BottomSheet from '../ui/BottomSheet.vue';
+import { confirmDialog } from '../../composables/useConfirm';
+import { toast } from '../../composables/useToast';
 import { useShoppingCategories, type ShoppingCategory } from '../../composables/useShoppingCategories';
-import { Bars3Icon, PencilSquareIcon, TrashIcon, PlusIcon, XMarkIcon, CheckIcon } from '@heroicons/vue/24/outline';
+import { Bars3Icon, PencilSquareIcon, TrashIcon, PlusIcon, CheckIcon } from '@heroicons/vue/24/outline';
 
 defineEmits<{ (e: 'close'): void }>();
 
@@ -29,6 +32,16 @@ const saveEdit = async () => {
   editingId.value = null;
 };
 
+const handleDelete = async (cat: ShoppingCategory) => {
+  const ok = await confirmDialog({
+    title: `Regal „${cat.name}“ löschen?`,
+    message: 'Einträge darin landen unter „Sonstiges“.',
+    confirmLabel: 'Löschen',
+    danger: true,
+  });
+  if (ok) await deleteCategory(cat.id);
+};
+
 const newName = ref('');
 const newIcon = ref('');
 const handleAdd = async () => {
@@ -40,18 +53,12 @@ const handleAdd = async () => {
 </script>
 
 <template>
-  <div class="modal modal-open modal-bottom sm:modal-middle" @click.self="$emit('close')">
-    <div class="modal-box">
-      <div class="flex items-center justify-between mb-1">
-        <h3 class="font-bold text-lg">Regale sortieren</h3>
-        <button class="btn btn-sm btn-ghost btn-circle" @click="$emit('close')"><XMarkIcon class="h-5 w-5" /></button>
-      </div>
-      <p class="text-xs text-base-content/60 mb-4">Ziehe die Kategorien in die Reihenfolge deines Supermarkts.</p>
+  <BottomSheet :open="true" title="Regale sortieren" subtitle="Ziehe die Regale in die Reihenfolge deines Supermarkts." @close="$emit('close')">
 
       <draggable v-model="draftOrder" item-key="id" handle=".drag-handle" :animation="200" tag="div" class="flex flex-col gap-2">
         <template #item="{ element: cat }">
-          <div class="flex items-center gap-2 p-2 rounded-lg bg-base-200">
-            <button class="drag-handle btn btn-xs btn-circle btn-ghost cursor-grab active:cursor-grabbing" title="Verschieben">
+          <div class="flex items-center gap-2 p-2 rounded-2xl bg-base-200">
+            <button class="drag-handle btn btn-sm btn-circle btn-ghost touch-none cursor-grab active:cursor-grabbing" title="Verschieben">
               <Bars3Icon class="h-4 w-4" />
             </button>
 
@@ -62,8 +69,8 @@ const handleAdd = async () => {
             </template>
             <template v-else>
               <span class="flex-1 truncate"><span class="mr-1">{{ cat.icon }}</span>{{ cat.name }}</span>
-              <button class="btn btn-xs btn-circle btn-ghost" title="Umbenennen" @click="startEdit(cat)"><PencilSquareIcon class="h-4 w-4" /></button>
-              <button class="btn btn-xs btn-circle btn-ghost text-error" title="Löschen" @click="deleteCategory(cat.id)"><TrashIcon class="h-4 w-4" /></button>
+              <button class="btn btn-sm btn-circle btn-ghost" title="Umbenennen" @click="startEdit(cat)"><PencilSquareIcon class="h-4 w-4" /></button>
+              <button class="btn btn-sm btn-circle btn-ghost text-error" title="Löschen" @click="handleDelete(cat)"><TrashIcon class="h-4 w-4" /></button>
             </template>
           </div>
         </template>
@@ -76,6 +83,5 @@ const handleAdd = async () => {
         <input v-model="newName" class="input input-bordered input-sm flex-1" placeholder="Neue Kategorie…" @keyup.enter="handleAdd" />
         <button class="btn btn-sm btn-primary btn-circle" :disabled="!newName.trim()" @click="handleAdd"><PlusIcon class="h-5 w-5" /></button>
       </div>
-    </div>
-  </div>
+  </BottomSheet>
 </template>

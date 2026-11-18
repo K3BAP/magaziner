@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { useRoute } from 'vue-router';
 import { useAuth } from './composables/useAuth';
 import { useInventory } from './composables/useInventory';
 import { useTodos } from './composables/useTodos';
@@ -10,73 +11,94 @@ import { useRecipes } from './composables/useRecipes';
 import { useFinance } from './composables/useFinance';
 import { useHouseholds } from './composables/useHouseholds';
 import { useActiveHousehold } from './composables/useActiveHousehold';
-import { useRoute } from 'vue-router';
-import TheNavbar from './components/layout/TheNavbar.vue';
-import TheDrawer from './components/layout/TheDrawer.vue';
-import ChangelogModal from './components/ChangelogModal.vue';
+import { useActivity } from './composables/useActivity';
+import { useRealtime } from './composables/useRealtime';
+import { useDashboard } from './composables/useDashboard';
 import { useChangelog } from './composables/useChangelog';
 import { useKeyboardInset } from './composables/useKeyboardInset';
+import { useTheme } from './composables/useTheme';
+import { useActiveMembers } from './composables/useHouseholdMembers';
+import TheAppBar from './components/layout/TheAppBar.vue';
+import TheTabBar from './components/layout/TheTabBar.vue';
+import ChangelogModal from './components/ChangelogModal.vue';
+import ToastHost from './components/ui/ToastHost.vue';
+import ConfirmHost from './components/ui/ConfirmHost.vue';
+import OfflineBanner from './components/ui/OfflineBanner.vue';
 
 // Track the on-screen keyboard once for the whole app (publishes --keyboard-inset).
 useKeyboardInset();
+// Applies the saved light/dark/system choice before first paint of the shell.
+useTheme();
 
+const route = useRoute();
 const { user, isAuthReady } = useAuth();
-const { fetchInventory } = useInventory();
-const { fetchTodos } = useTodos();
-const { fetchItems: fetchShoppingItems, clearItems: clearShoppingItems } = useShoppingList();
-const { fetchLists: fetchShoppingLists, clearLists: clearShoppingLists } = useShoppingLists();
-const { fetchCategories: fetchShoppingCategories, clearCategories: clearShoppingCategories } = useShoppingCategories();
-const { fetchRecipes } = useRecipes();
-const { fetchMembers, fetchCategories: fetchFinanceCategories, fetchTransactions } = useFinance();
+const inventory = useInventory();
+const todos = useTodos();
+const shoppingItems = useShoppingList();
+const shoppingLists = useShoppingLists();
+const shoppingCategories = useShoppingCategories();
+const recipes = useRecipes();
+const finance = useFinance();
 const { fetchMyHouseholds, clearHouseholds } = useHouseholds();
 const { activeHouseholdId } = useActiveHousehold();
+const activity = useActivity();
+const realtime = useRealtime();
+const dashboard = useDashboard();
 const { bootstrap: bootstrapChangelog } = useChangelog();
-const route = useRoute();
+const { ensureLoaded: ensureMembers } = useActiveMembers();
 
-const refetchAllData = () => {
-  fetchInventory();
-  fetchTodos();
-  fetchRecipes();
-  fetchMembers();
-  fetchFinanceCategories();
-  fetchTransactions();
-  refetchShopping();
-};
+const isBare = computed(() => route.meta.layout === 'bare' || (!route.name && !user.value));
 
 // Shopping needs ordering: aisles and lists first (the latter resolves the
 // active list), then the entries of that list.
 const refetchShopping = async () => {
-  await fetchShoppingCategories();
-  await fetchShoppingLists();
-  await fetchShoppingItems();
+  await shoppingCategories.fetchCategories();
+  await shoppingLists.fetchLists();
+  await shoppingItems.fetchItems();
 };
 
-// On user login: useAuth has already loaded the profile by the time isAuthReady
-// flips true, so we just need to load the household list and then fetch data.
-// On logout: clear the household list (data composables get clipped by RLS naturally).
+const refetchAllData = () => {
+  inventory.fetchInventory();
+  todos.fetchTodos();
+  recipes.fetchRecipes();
+  finance.fetchMembers();
+  finance.fetchCategories();
+  finance.fetchTransactions();
+  activity.fetchActivity();
+  ensureMembers();
+  refetchShopping();
+};
+
+const clearAllData = () => {
+  inventory.clearInventory();
+  todos.clearTodos();
+  shoppingItems.clearItems();
+  shoppingLists.clearLists();
+  shoppingCategories.clearCategories();
+  activity.clearActivity();
+};
+
 watch(
   [user, isAuthReady],
   async ([u, ready]) => {
     if (!ready) return;
     if (u) {
       await fetchMyHouseholds();
+      dashboard.loadLayout();
       refetchAllData();
-      // On a brand-new install bootstrap silently records the current version;
-      // on an existing install where the stored version is older than what
-      // we ship now, the modal renders itself via `hasUnseen`.
+      realtime.start(activeHouseholdId.value);
       bootstrapChangelog();
     } else {
+      realtime.stop();
       clearHouseholds();
-      clearShoppingItems();
-      clearShoppingLists();
-      clearShoppingCategories();
+      clearAllData();
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
-// When the active household changes (switch, create), re-fetch everything.
-// Skip the very first transition from null → initial value (already handled above).
+// When the active household changes (switch, create), wipe and re-fetch
+// everything so no row of the old household lingers on screen.
 let firstActiveHouseholdResolved = false;
 watch(activeHouseholdId, (hid, prev) => {
   if (!firstActiveHouseholdResolved) {
@@ -84,34 +106,58 @@ watch(activeHouseholdId, (hid, prev) => {
     return;
   }
   if (hid && hid !== prev) {
+    clearAllData();
     refetchAllData();
+    realtime.start(hid);
   }
 });
+
+// Coming back to a backgrounded PWA: the websocket may have been dropped, so
+// re-sync once after a longer pause.
+let hiddenAt = 0;
+const onVisibility = () => {
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    return;
+  }
+  if (user.value && hiddenAt && Date.now() - hiddenAt > 60_000) {
+    refetchAllData();
+    realtime.start(activeHouseholdId.value);
+  }
+  hiddenAt = 0;
+};
+onMounted(() => document.addEventListener('visibilitychange', onVisibility));
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisibility));
 </script>
 
 <template>
-  <div v-if="route.name === 'login'">
+  <div v-if="isBare" class="min-h-dvh bg-base-200">
     <router-view />
   </div>
 
-  <div v-else class="drawer">
-    <input id="main-drawer" type="checkbox" class="drawer-toggle" />
+  <div v-else class="min-h-dvh bg-base-200 flex flex-col">
+    <TheAppBar />
+    <OfflineBanner />
 
-    <div class="drawer-content flex flex-col min-h-screen bg-base-200">
-      <TheNavbar />
+    <main class="app-main flex-1 w-full mx-auto max-w-2xl px-4 pt-2">
+      <router-view v-slot="{ Component, route: r }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" :key="r.name === 'location' || r.name === 'recipe-detail' ? r.fullPath : r.name" />
+        </Transition>
+      </router-view>
+    </main>
 
-      <div
-        class="p-4 container mx-auto max-w-md flex-grow"
-        :style="{ paddingBottom: 'calc(1rem + var(--keyboard-inset, 0px))' }"
-      >
-        <router-view />
-      </div>
-    </div>
-
-    <TheDrawer />
-
-    <!-- "What's new" pop-up. Renders itself only when the user is on a
-         version newer than the one they last acknowledged. -->
+    <TheTabBar />
     <ChangelogModal />
   </div>
+
+  <ToastHost />
+  <ConfirmHost />
 </template>
+
+<style scoped>
+.app-main {
+  /* Room for the tab bar, a FAB and the keyboard. */
+  padding-bottom: calc(var(--tabbar-h, 0px) + 6rem + var(--keyboard-inset, 0px));
+}
+</style>

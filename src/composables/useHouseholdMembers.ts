@@ -1,4 +1,5 @@
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useActiveHousehold } from './useActiveHousehold';
 import { supabase } from '../supabase';
 
 export interface HouseholdMember {
@@ -101,4 +102,29 @@ export function useHouseholdMembers() {
     removeMember,
     transferOwnership,
   };
+}
+
+/**
+ * Members of the *active* household, loaded on first use. Used for assignees,
+ * activity actors and finance onboarding.
+ */
+
+export function useActiveMembers() {
+  const { activeHouseholdId } = useActiveHousehold();
+  const { fetchMembers } = useHouseholdMembers();
+
+  const members = computed<HouseholdMember[]>(() =>
+    activeHouseholdId.value ? membersByHousehold.value[activeHouseholdId.value] ?? [] : [],
+  );
+
+  const ensureLoaded = async () => {
+    const hid = activeHouseholdId.value;
+    if (!hid || membersByHousehold.value[hid] || loadingByHousehold.value[hid]) return;
+    await fetchMembers(hid);
+  };
+
+  const memberById = (id: string | null | undefined) =>
+    id ? members.value.find((m) => m.user_id === id) ?? null : null;
+
+  return { members, ensureLoaded, memberById };
 }

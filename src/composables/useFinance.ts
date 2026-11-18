@@ -1,7 +1,9 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
 import { useAuth } from './useAuth';
-import { useActiveHousehold } from './useActiveHousehold';
+import { useActiveHousehold, householdSnapshot } from './useActiveHousehold';
+import { toast } from './useToast';
+import { confirmDialog } from './useConfirm';
 
 export interface FinanceMember {
     id: string;
@@ -49,29 +51,34 @@ export function useFinance() {
 
     const fetchMembers = async () => {
         if (!user.value) return;
+        const isCurrent = householdSnapshot();
         const { data, error } = await supabase
             .from('finance_members')
             .select('*')
             .order('created_at', { ascending: true });
 
-        if (error) console.error('Error fetching members:', error);
+        if (!isCurrent()) return;
+        if (error) toast.error('Personen konnten nicht geladen werden.', error);
         else members.value = data || [];
     };
 
     const fetchCategories = async () => {
         if (!user.value) return;
+        const isCurrent = householdSnapshot();
         const { data, error } = await supabase
             .from('finance_categories')
             .select('*')
             .order('name', { ascending: true });
 
-        if (error) console.error('Error fetching categories:', error);
+        if (!isCurrent()) return;
+        if (error) toast.error('Kategorien konnten nicht geladen werden.', error);
         else categories.value = data || [];
     };
 
     const fetchTransactions = async () => {
         if (!user.value) return;
         loading.value = true;
+        const isCurrent = householdSnapshot();
 
         // Fetch transactions with related data
         // Note: Supabase join syntax for nested data
@@ -87,8 +94,9 @@ export function useFinance() {
             .order('date', { ascending: false })
             .order('created_at', { ascending: false });
 
+        if (!isCurrent()) { loading.value = false; return; }
         if (error) {
-            console.error('Error fetching transactions:', error);
+            toast.error('Transaktionen konnten nicht geladen werden.', error);
         } else {
             // Map data to match interface (flatten joins if needed, usually Supabase returns objects)
             transactions.value = (data as any[]).map(t => ({
@@ -111,7 +119,7 @@ export function useFinance() {
             .single();
 
         if (error) {
-            console.error('Error adding member:', error);
+            toast.error('Person konnte nicht angelegt werden.', error);
             return null;
         }
         members.value.push(data);
@@ -126,7 +134,7 @@ export function useFinance() {
             .eq('id', id);
 
         if (error) {
-            console.error('Error updating member:', error);
+            toast.error('Person konnte nicht gespeichert werden.', error);
             return false;
         }
 
@@ -137,7 +145,13 @@ export function useFinance() {
     };
 
     const deleteMember = async (id: string) => {
-        if (!confirm('Person wirklich löschen? Alle zugehörigen Transaktionen bleiben erhalten, aber der Name verschwindet aus der Historie (wird "Unbekannt").')) return;
+        const ok = await confirmDialog({
+            title: 'Person löschen?',
+            message: 'Alle zugehörigen Transaktionen bleiben erhalten, aber der Name verschwindet aus der Historie (wird „Unbekannt“).',
+            confirmLabel: 'Löschen',
+            danger: true,
+        });
+        if (!ok) return false;
 
         const { error } = await supabase
             .from('finance_members')
@@ -145,8 +159,7 @@ export function useFinance() {
             .eq('id', id);
 
         if (error) {
-            console.error('Error deleting member:', error);
-            alert('Fehler beim Löschen. Möglicherweise existieren noch Abhängigkeiten.');
+            toast.error('Löschen fehlgeschlagen. Möglicherweise hängen noch Buchungen an dieser Person.', error);
             return false;
         }
 
@@ -163,7 +176,7 @@ export function useFinance() {
             .single();
 
         if (error) {
-            console.error('Error adding category:', error);
+            toast.error('Kategorie konnte nicht angelegt werden.', error);
             return null;
         }
         categories.value.push(data);
@@ -178,7 +191,7 @@ export function useFinance() {
             .eq('id', id);
 
         if (error) {
-            console.error('Error updating category:', error);
+            toast.error('Kategorie konnte nicht gespeichert werden.', error);
             return false;
         }
 
@@ -191,7 +204,8 @@ export function useFinance() {
     };
 
     const deleteCategory = async (id: string) => {
-        if (!confirm('Kategorie löschen?')) return;
+        const ok = await confirmDialog({ title: 'Kategorie löschen?', confirmLabel: 'Löschen', danger: true });
+        if (!ok) return false;
 
         const { error } = await supabase
             .from('finance_categories')
@@ -199,7 +213,7 @@ export function useFinance() {
             .eq('id', id);
 
         if (error) {
-            console.error('Error deleting category:', error);
+            toast.error('Kategorie konnte nicht gelöscht werden.', error);
             return false;
         }
 
@@ -224,7 +238,7 @@ export function useFinance() {
             .from('finance_categories')
             .insert(defaults.map(d => ({ ...d, household_id: activeHouseholdId.value! })));
 
-        if (error) console.error('Error seeding categories:', error);
+        if (error) toast.error('Standard-Kategorien konnten nicht angelegt werden.', error);
         else await fetchCategories();
     };
 
@@ -259,7 +273,7 @@ export function useFinance() {
             .single();
 
         if (transError || !trans) {
-            console.error('Error adding transaction:', transError);
+            toast.error('Buchung konnte nicht gespeichert werden.', transError);
             return null;
         }
 
@@ -277,9 +291,11 @@ export function useFinance() {
                 .insert(splitsPayload);
 
             if (splitError) {
-                console.error('Error adding splits:', splitError);
-                // Should ideally rollback transaction here, but for now simple error logging
-                // In a real app we might want to delete the transaction
+                // Without splits the expense would silently skew every balance:
+                // remove the half-written transaction again.
+                await supabase.from('finance_transactions').delete().eq('id', trans.id);
+                toast.error('Aufteilung konnte nicht gespeichert werden – Buchung verworfen.', splitError);
+                return null;
             }
         }
 
@@ -317,7 +333,7 @@ export function useFinance() {
             .eq('id', id);
 
         if (transError) {
-            console.error('Error updating transaction:', transError);
+            toast.error('Änderung konnte nicht gespeichert werden.', transError);
             return null;
         }
 
@@ -335,7 +351,7 @@ export function useFinance() {
                     split_percentage: s.percentage
                 }));
                 const { error: splitError } = await supabase.from('finance_splits').insert(splitsPayload);
-                if (splitError) console.error('Error updating splits:', splitError);
+                if (splitError) toast.error('Aufteilung konnte nicht gespeichert werden.', splitError);
             }
         }
 
@@ -345,10 +361,12 @@ export function useFinance() {
 
     const deleteTransaction = async (id: string) => {
         const { error } = await supabase.from('finance_transactions').delete().eq('id', id);
-        if (error) console.error('Error deleting transaction', error);
-        else {
-            transactions.value = transactions.value.filter(t => t.id !== id);
+        if (error) {
+            toast.error('Buchung konnte nicht gelöscht werden.', error);
+            return false;
         }
+        transactions.value = transactions.value.filter(t => t.id !== id);
+        return true;
     };
 
     // --- Computed Logic ---

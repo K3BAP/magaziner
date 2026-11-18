@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { supabase } from '../supabase';
-import { useActiveHousehold } from './useActiveHousehold';
+import { useActiveHousehold, householdSnapshot } from './useActiveHousehold';
+import { toast } from './useToast';
 import { DEFAULT_SHOPPING_CATEGORIES, MISC_CATEGORY_KEY } from '../utils/shoppingCategories';
 
 export interface ShoppingCategory {
@@ -23,12 +24,14 @@ export function useShoppingCategories() {
   const fetchCategories = async () => {
     try {
       loading.value = true;
+      const isCurrent = householdSnapshot();
       const { data, error } = await supabase
         .from('shopping_categories')
         .select('*')
         .order('position', { ascending: true });
 
-      if (error) throw error;
+      if (!isCurrent()) return;
+            if (error) throw error;
       categories.value = data || [];
 
       // Self-heal: a household that somehow has no aisles (e.g. all deleted)
@@ -37,7 +40,7 @@ export function useShoppingCategories() {
         await seedDefaults();
       }
     } catch (error) {
-      console.error('Fehler beim Laden der Kategorien:', error);
+      toast.error('Fehler beim Laden der Kategorien.', error);
     } finally {
       loading.value = false;
     }
@@ -57,7 +60,7 @@ export function useShoppingCategories() {
       .insert(rows)
       .select();
     if (error) {
-      console.error('Fehler beim Anlegen der Standard-Kategorien:', error);
+      toast.error('Fehler beim Anlegen der Standard-Kategorien.', error);
       return;
     }
     categories.value = (data || []).sort((a, b) => a.position - b.position);
@@ -79,7 +82,7 @@ export function useShoppingCategories() {
       .single();
 
     if (error || !data) {
-      console.error('Fehler beim Anlegen der Kategorie:', error);
+      toast.error('Fehler beim Anlegen der Kategorie.', error);
       return null;
     }
     categories.value.push(data);
@@ -103,7 +106,7 @@ export function useShoppingCategories() {
     if (error) {
       cat.name = prevName;
       cat.icon = prevIcon;
-      console.error('Fehler beim Umbenennen der Kategorie:', error);
+      toast.error('Fehler beim Umbenennen der Kategorie.', error);
     }
   };
 
@@ -115,7 +118,7 @@ export function useShoppingCategories() {
     const { error } = await supabase.from('shopping_categories').delete().eq('id', id);
     if (error) {
       categories.value = prev;
-      console.error('Fehler beim Löschen der Kategorie:', error);
+      toast.error('Fehler beim Löschen der Kategorie.', error);
     }
   };
 
@@ -136,7 +139,7 @@ export function useShoppingCategories() {
     );
     const failed = results.find((r) => r.error);
     if (failed) {
-      console.error('Fehler beim Sortieren der Kategorien:', failed.error);
+      toast.error('Fehler beim Sortieren der Kategorien.', failed.error);
       prev.forEach((p) => {
         const cat = categories.value.find((c) => c.id === p.id);
         if (cat) cat.position = p.position;

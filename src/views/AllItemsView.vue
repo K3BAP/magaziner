@@ -1,84 +1,98 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue';
-import { useInventory } from '../composables/useInventory';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useInventory, itemExpiryStatus, isBelowMinimum, type Item } from '../composables/useInventory';
 import ItemRow from '../components/ItemRow.vue';
+import ItemDetailSheet from '../components/inventory/ItemDetailSheet.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
+import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
-const { items } = useInventory();
+type Filter = 'expired' | 'soon' | 'opened' | 'low';
 
-const globalSearchQuery = ref('');
-const sortBy = ref<'name' | 'date'>('name');
-const searchInputRef = ref<HTMLInputElement | null>(null);
+const route = useRoute();
+const router = useRouter();
+const { items, matchesQuery } = useInventory();
 
-// Focus search input automatically when view opens
+const query = ref('');
+const sortBy = ref<'name' | 'expiry'>('name');
+const filter = ref<Filter | null>((route.query.filter as Filter) || null);
+const detailId = ref<string | null>(null);
+const searchInput = ref<HTMLInputElement | null>(null);
+
+watch(filter, (f) => router.replace({ query: f ? { filter: f } : {} }));
+
 onMounted(async () => {
+  if (filter.value) return; // came from a summary chip — don't pop the keyboard
   await nextTick();
-  searchInputRef.value?.focus();
+  searchInput.value?.focus();
 });
 
-// Helper to find earliest date in an item's instances
-const getEarliest = (item: any) => {
-  if (!item.instances || item.instances.length === 0) return 9999999999999;
-  const firstDate = item.instances[0].expiry_date;
-  return firstDate ? new Date(firstDate).getTime() : 9999999999999;
+const FILTERS: { key: Filter; label: string; test: (i: Item) => boolean }[] = [
+  { key: 'expired', label: 'Abgelaufen', test: (i) => itemExpiryStatus(i) === 'expired' },
+  { key: 'soon', label: 'Bald fällig', test: (i) => itemExpiryStatus(i) === 'soon' },
+  { key: 'opened', label: 'Geöffnet', test: (i) => i.instances.some((x) => x.opened_at) },
+  { key: 'low', label: 'Knapp', test: isBelowMinimum },
+];
+
+const soonest = (i: Item) => i.instances.find((x) => x.expiry_date)?.expiry_date ?? '9999-12-31';
+
+const results = computed(() => {
+  const f = FILTERS.find((x) => x.key === filter.value);
+  return items.value
+    .filter((i) => (!f || f.test(i)) && matchesQuery(i, query.value))
+    .sort((a, b) =>
+      sortBy.value === 'name' ? a.name.localeCompare(b.name, 'de') : soonest(a).localeCompare(soonest(b)),
+    );
+});
+
+const toggleFilter = (k: Filter) => {
+  filter.value = filter.value === k ? null : k;
+  if (filter.value === 'expired' || filter.value === 'soon') sortBy.value = 'expiry';
 };
-
-const allItemsFiltered = computed(() => {
-  // A) Filter
-  let result = items.value.filter(i => 
-    i.name.toLowerCase().includes(globalSearchQuery.value.toLowerCase())
-  );
-
-  // B) Sort
-  return result.sort((a, b) => {
-    if (sortBy.value === 'name') {
-      return a.name.localeCompare(b.name);
-    } else {
-      return getEarliest(a) - getEarliest(b);
-    }
-  });
-});
 </script>
 
 <template>
   <div>
-    <div class="flex flex-col gap-3 mb-6">
-      <input 
-        ref="searchInputRef"
-        v-model="globalSearchQuery" 
-        type="text" 
-        placeholder="Alle Produkte durchsuchen..." 
-        class="input input-bordered w-full shadow-sm"
-      />
-      
-      <div class="flex gap-2">
-        <button 
-          @click="sortBy = 'name'" 
-          class="btn btn-sm flex-1"
-          :class="sortBy === 'name' ? 'btn-primary' : 'btn-outline border-base-300'"
-        >
-          A-Z
-        </button>
-        <button 
-          @click="sortBy = 'date'" 
-          class="btn btn-sm flex-1"
-          :class="sortBy === 'date' ? 'btn-primary' : 'btn-outline border-base-300'"
-        >
-          📅 Ablaufdatum
-        </button>
+    <label class="input w-full rounded-full bg-base-100 border-0 mb-3">
+      <MagnifyingGlassIcon class="h-5 w-5 opacity-50" />
+      <input ref="searchInput" v-model="query" type="search" placeholder="Produkt, Kategorie oder Ort" autocomplete="off" />
+      <button v-if="query" type="button" class="btn btn-ghost btn-xs btn-circle" aria-label="Suche leeren" @click="query = ''">
+        <XMarkIcon class="h-4 w-4" />
+      </button>
+    </label>
+
+    <div class="-mx-4 px-4 flex gap-1.5 overflow-x-auto pb-1 mb-3">
+      <button
+        v-for="f in FILTERS"
+        :key="f.key"
+        type="button"
+        class="btn btn-sm rounded-full border-0 shrink-0"
+        :class="filter === f.key ? 'btn-primary' : 'bg-base-100'"
+        @click="toggleFilter(f.key)"
+      >
+        {{ f.label }}
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between px-1 mb-2">
+      <span class="text-xs font-semibold text-base-content/55">{{ results.length }} {{ results.length === 1 ? 'Produkt' : 'Produkte' }}</span>
+      <div class="join">
+        <button type="button" class="btn btn-xs join-item" :class="sortBy === 'name' ? 'btn-neutral' : 'btn-ghost'" @click="sortBy = 'name'">A–Z</button>
+        <button type="button" class="btn btn-xs join-item" :class="sortBy === 'expiry' ? 'btn-neutral' : 'btn-ghost'" @click="sortBy = 'expiry'">Ablauf</button>
       </div>
     </div>
 
-    <div class="card bg-base-100 shadow-sm overflow-hidden">
-      <ItemRow 
-        v-for="item in allItemsFiltered" 
-        :key="item.id" 
-        :item="item" 
-        :show-location="true" 
-      />
-      
-      <div v-if="allItemsFiltered.length === 0" class="p-8 text-center opacity-50">
-        {{ globalSearchQuery ? 'Keine Treffer.' : 'Keine Produkte vorhanden.' }}
-      </div>
+    <div v-if="results.length" class="surface overflow-hidden divide-y divide-base-200">
+      <ItemRow v-for="item in results" :key="item.id" :item="item" show-location @open="detailId = $event.id" />
     </div>
+    <EmptyState
+      v-else
+      compact
+      icon="🔍"
+      :title="query || filter ? 'Keine Treffer' : 'Noch keine Produkte'"
+      :text="query ? 'Umlaute sind egal – „Muesli“ findet auch „Müsli“.' : undefined"
+    />
+
+    <ItemDetailSheet :item-id="detailId" @close="detailId = null" />
   </div>
 </template>

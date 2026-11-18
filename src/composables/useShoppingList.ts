@@ -1,10 +1,12 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
-import { useActiveHousehold } from './useActiveHousehold';
+import { useActiveHousehold, householdSnapshot } from './useActiveHousehold';
+import { toast } from './useToast';
 import { useShoppingLists } from './useShoppingLists';
 import { useShoppingCategories, type ShoppingCategory } from './useShoppingCategories';
 import { guessCategoryKey, MISC_CATEGORY_KEY } from '../utils/shoppingCategories';
 import { parseOfferPrefix, startOfDay, type OfferPrefix } from '../utils/offerDate';
+import { normalize } from '../utils/text';
 
 export interface ShoppingItem {
     id: string;
@@ -13,6 +15,8 @@ export interface ShoppingItem {
     created_at: string;
     list_id: string | null;
     category_id: string | null;
+    note?: string | null;
+    household_id?: string;
 }
 
 /** A category bucket plus its entries, ready to render in aisle order. */
@@ -35,6 +39,55 @@ const OFFER_SOON_ID = '__offer_soon';
 
 const items = ref<ShoppingItem[]>([]);
 const loading = ref(false);
+
+// --- Autocomplete history -----------------------------------------------
+// Titles the household has typed before, most-recent first. Persisted per
+// device; seeded from the list itself so it is useful from day one.
+const HISTORY_KEY = 'shopping_history_v1';
+const HISTORY_CAP = 200;
+const history = ref<string[]>(
+    (() => {
+        try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+    })(),
+);
+const saveHistory = () => {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value.slice(0, HISTORY_CAP))); } catch { /* quota */ }
+};
+const rememberTitle = (title: string) => {
+    const clean = (parseOfferPrefix(title)?.rest ?? title).trim();
+    if (!clean) return;
+    history.value = [clean, ...history.value.filter(h => normalize(h) !== normalize(clean))].slice(0, HISTORY_CAP);
+    saveHistory();
+};
+const seedHistory = (titles: string[]) => {
+    let changed = false;
+    for (const t of titles) {
+        const clean = (parseOfferPrefix(t)?.rest ?? t).trim();
+        if (clean && !history.value.some(h => normalize(h) === normalize(clean))) {
+            history.value.push(clean);
+            changed = true;
+        }
+    }
+    if (changed) saveHistory();
+};
+
+/** Up to `limit` previous titles matching `query`, skipping ones already open on the list. */
+const suggestions = (query: string, extra: string[] = [], limit = 5): string[] => {
+    const q = normalize(query);
+    if (q.length < 2) return [];
+    const open = new Set(items.value.filter(i => !i.is_completed).map(i => normalize(i.title)));
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const cand of [...history.value, ...extra]) {
+        const n = normalize(cand);
+        if (seen.has(n) || open.has(n) || n === q) continue;
+        seen.add(n);
+        if (n.startsWith(q) || n.includes(' ' + q) || n.includes(q)) out.push(cand);
+        if (out.length >= limit) break;
+    }
+    // Prefix matches first.
+    return out.sort((a, b) => Number(!normalize(a).startsWith(q)) - Number(!normalize(b).startsWith(q)));
+};
 
 // "Today" has to be reactive: `groupedItems` is a computed, and a computed can't
 // re-run on wall-clock time. Without this, a PWA left open overnight would still
@@ -75,6 +128,7 @@ export function useShoppingList() {
         }
         try {
             loading.value = true;
+      const isCurrent = householdSnapshot();
             const { data, error } = await supabase
                 .from('shopping_list')
                 .select('*')
@@ -82,11 +136,13 @@ export function useShoppingList() {
                 .order('is_completed', { ascending: true })
                 .order('created_at', { ascending: false });
 
+            if (!isCurrent()) return;
             if (error) throw error;
             items.value = data || [];
             refreshToday();
+            seedHistory(items.value.map(i => i.title));
         } catch (error) {
-            console.error('Fehler beim Laden der Einkaufsliste:', error);
+            toast.error('Fehler beim Laden der Einkaufsliste.', error);
         } finally {
             loading.value = false;
         }
@@ -98,7 +154,16 @@ export function useShoppingList() {
         if (!trimmed) return;
 
         if (!activeHouseholdId.value || !activeListId.value) {
-            console.error('Keine aktive Liste — Eintrag konnte nicht gespeichert werden.');
+            toast.error('Keine aktive Liste — Eintrag konnte nicht gespeichert werden.');
+            return;
+        }
+
+        // Already in the cart from last time? Put it back on the list instead of
+        // creating a duplicate.
+        const ticked = items.value.find(i => i.is_completed && normalize(i.title) === normalize(trimmed));
+        if (ticked) {
+            await toggleItem(ticked);
+            rememberTitle(trimmed);
             return;
         }
 
@@ -108,7 +173,7 @@ export function useShoppingList() {
         const guessedCategoryId = categoryByKey(guessCategoryKey(forCategory))?.id ?? null;
 
         // Optimistic Update
-        const tempId = crypto.randomUUID();
+        const tempId = `temp-${crypto.randomUUID()}`;
         const newItem: ShoppingItem = {
             id: tempId,
             title: trimmed,
@@ -131,11 +196,102 @@ export function useShoppingList() {
             .single();
 
         if (error) {
-            console.error('Fehler beim Speichern:', error);
+            toast.error('Eintrag konnte nicht gespeichert werden.', error);
             items.value = items.value.filter(i => i.id !== tempId); // Rollback
         } else if (data) {
+            // The realtime echo may have landed first — never keep two copies.
+            items.value = items.value.filter(i => i.id !== data.id);
             const index = items.value.findIndex(i => i.id === tempId);
             if (index !== -1) items.value[index] = data;
+            else items.value.unshift(data);
+        }
+        rememberTitle(trimmed);
+    };
+
+    /** Insert several entries at once (e.g. a recipe's ingredients). */
+    const addMany = async (titles: string[]) => {
+        const clean = titles.map(t => t.trim()).filter(Boolean);
+        if (clean.length === 0 || !activeHouseholdId.value || !activeListId.value) return 0;
+        const rows = clean.map(title => ({
+            title,
+            household_id: activeHouseholdId.value,
+            list_id: activeListId.value,
+            category_id: categoryByKey(guessCategoryKey(parseOfferPrefix(title)?.rest ?? title))?.id ?? null,
+        }));
+        const { data, error } = await supabase.from('shopping_list').insert(rows).select();
+        if (error) {
+            toast.error('Einträge konnten nicht gespeichert werden.', error);
+            return 0;
+        }
+        for (const row of data ?? []) {
+            if (!items.value.some(i => i.id === row.id)) items.value.unshift(row);
+        }
+        clean.forEach(rememberTitle);
+        return data?.length ?? 0;
+    };
+
+    /** Edit title / note. Re-categorizes only when the user didn't pick an aisle by hand before. */
+    const updateItem = async (item: ShoppingItem, patch: { title?: string; note?: string | null; category_id?: string | null }) => {
+        const prev = { title: item.title, note: item.note ?? null, category_id: item.category_id };
+        if (patch.title !== undefined) patch.title = patch.title.trim();
+        if (patch.title === '') return;
+        Object.assign(item, patch);
+        const { error } = await supabase.from('shopping_list').update(patch).eq('id', item.id);
+        if (error) {
+            Object.assign(item, prev);
+            toast.error('Eintrag konnte nicht gespeichert werden.', error);
+        }
+    };
+
+    /** Delete a single entry — always with undo, since a swipe is easy to trigger. */
+    const deleteItem = async (item: ShoppingItem) => {
+        const snapshot = { ...item };
+        items.value = items.value.filter(i => i.id !== item.id);
+        const { error } = await supabase.from('shopping_list').delete().eq('id', item.id);
+        if (error) {
+            items.value.push(snapshot);
+            return toast.error('Eintrag konnte nicht gelöscht werden.', error);
+        }
+        toast.undo(`„${snapshot.title}“ entfernt`, () => restore([snapshot]));
+    };
+
+    const restore = async (rows: ShoppingItem[]) => {
+        const { error } = await supabase.from('shopping_list').upsert(
+            rows.map(r => ({
+                id: r.id,
+                title: r.title,
+                is_completed: r.is_completed,
+                created_at: r.created_at,
+                list_id: r.list_id,
+                category_id: r.category_id,
+                note: r.note ?? null,
+                household_id: activeHouseholdId.value,
+            })),
+        );
+        if (error) return toast.error('Wiederherstellen fehlgeschlagen.', error);
+        for (const r of rows) {
+            if (r.list_id === activeListId.value && !items.value.some(i => i.id === r.id)) items.value.push(r);
+        }
+    };
+
+    /** Realtime: apply a change made elsewhere (or our own echo). */
+    const applyRemote = (event: 'INSERT' | 'UPDATE' | 'DELETE', row: any, old: any) => {
+        if (event === 'DELETE') {
+            items.value = items.value.filter(i => i.id !== old?.id);
+            return;
+        }
+        const idx = items.value.findIndex(i => i.id === row.id);
+        if (row.list_id !== activeListId.value) {
+            if (idx !== -1) items.value.splice(idx, 1); // moved to another list
+            return;
+        }
+        if (idx === -1) {
+            // Our own optimistic insert may still be pending under a temp id.
+            const temp = items.value.findIndex(i => i.id.startsWith('temp-') && i.title === row.title);
+            if (temp !== -1) items.value[temp] = row;
+            else items.value.unshift(row);
+        } else {
+            items.value[idx] = { ...items.value[idx], ...row };
         }
     };
 
@@ -151,7 +307,7 @@ export function useShoppingList() {
 
         if (error) {
             item.is_completed = oldStatus; // Rollback
-            console.error('Fehler beim Update:', error);
+            toast.error('Eintrag konnte nicht aktualisiert werden.', error);
         }
     };
 
@@ -170,8 +326,14 @@ export function useShoppingList() {
 
         if (error) {
             items.value = prevItems; // Rollback
-            console.error('Fehler beim Löschen der abgehakten Einträge:', error);
+            toast.error('Abgehakte Einträge konnten nicht gelöscht werden.', error);
+            return;
         }
+        const doomed = prevItems.filter(i => doomedIds.includes(i.id));
+        toast.undo(
+            doomed.length === 1 ? 'Ein Eintrag gelöscht' : `${doomed.length} Einträge gelöscht`,
+            () => restore(doomed),
+        );
     };
 
     // 5. Manual category override
@@ -186,7 +348,7 @@ export function useShoppingList() {
 
         if (error) {
             item.category_id = prev; // Rollback
-            console.error('Fehler beim Ändern der Kategorie:', error);
+            toast.error('Kategorie konnte nicht geändert werden.', error);
         }
     };
 
@@ -298,6 +460,11 @@ export function useShoppingList() {
         toggleItem,
         deleteCompleted,
         setItemCategory,
-        clearItems
+        clearItems,
+        addMany,
+        updateItem,
+        deleteItem,
+        applyRemote,
+        suggestions,
     };
 }
