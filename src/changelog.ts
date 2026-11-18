@@ -30,6 +30,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.0.1',
+    date: '2026-11-18',
+    items: [
+      'Behoben: Die Rückfrage beim Löschen einer Einkaufsliste erschien hinter dem Fenster „Listen verwalten“ und war nicht erreichbar.',
+    ],
+  },
+  {
     version: '2.0.0',
     date: '2026-11-18',
     title: 'Magaziner 2.0',

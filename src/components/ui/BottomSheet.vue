@@ -27,6 +27,8 @@ const props = withDefaults(
     size?: 'sm' | 'md' | 'lg';
     /** Remove body padding (for full-bleed lists). */
     flush?: boolean;
+    /** Stack above other sheets (confirmations raised from inside a sheet). */
+    elevated?: boolean;
   }>(),
   { size: 'md' },
 );
@@ -121,7 +123,8 @@ const sizeClass = computed(
     <Transition name="sheet-fade">
       <div
         v-if="open"
-        class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]"
+        class="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]"
+        :class="elevated ? 'z-[70]' : 'z-[60]'"
         @click.self="close"
         @keydown="onKeydown"
       >

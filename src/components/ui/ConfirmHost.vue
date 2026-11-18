@@ -9,7 +9,7 @@ const open = computed(() => pending.value !== null);
 </script>
 
 <template>
-  <BottomSheet :open="open" size="sm" hide-close @close="answer(false)">
+  <BottomSheet :open="open" size="sm" hide-close elevated @close="answer(false)">
     <div v-if="pending" class="flex flex-col items-center text-center gap-3 pt-2">
       <div
         v-if="pending.danger"
