@@ -30,6 +30,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.1.0',
+    date: '2026-11-19',
+    title: 'Schulden-Verlauf',
+    items: [
+      'Neu in Finanzen → Übersicht: Unter „Verlauf“ siehst du als Kurve, wie sich der Kontostand jeder Person entwickelt hat – für 3 Monate, 1 Jahr oder seit Beginn.',
+      'Tippe auf die Kurve, um die Stände an einem bestimmten Tag zu sehen, und auf einen Namen, um seine Kurve aus- oder einzublenden.',
+    ],
+  },
+  {
     version: '2.0.1',
     date: '2026-11-18',
     items: [

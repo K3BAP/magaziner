@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, defineAsyncComponent, h } from 'vue';
 import { useFinance, type FinanceMember } from '../../composables/useFinance';
 import { formatCurrency } from '../../utils/currency';
 import { todayLocalISO } from '../../utils/date';
@@ -7,6 +7,12 @@ import UserAvatar from '../ui/UserAvatar.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import SectionHeader from '../ui/SectionHeader.vue';
 import { ArrowRightIcon, CheckBadgeIcon } from '@heroicons/vue/24/outline';
+
+// Chart.js stays out of the finance tab's first paint.
+const BalanceHistory = defineAsyncComponent({
+  loader: () => import('./BalanceHistory.vue'),
+  loadingComponent: { render: () => h('div', { class: 'skeleton h-72 rounded-[1.25rem]' }) },
+});
 
 const { balances, transactions, loading } = useFinance();
 
@@ -96,6 +102,11 @@ const monthName = new Date().toLocaleDateString('de-DE', { month: 'long' });
             </span>
           </button>
         </div>
+      </section>
+
+      <section v-if="transactions.length > 0">
+        <SectionHeader title="Verlauf" />
+        <BalanceHistory />
       </section>
 
       <section>

@@ -39,6 +39,23 @@ export interface FinanceTransaction {
     category?: FinanceCategory;
 }
 
+/**
+ * How one transaction moves each person's balance. Shared by the current
+ * balances and the balance history so both always agree.
+ * - expense: payer +amount (paid), every split member −share (consumed)
+ * - payment: payer +amount (debt paid off), receiver −amount (claim settled)
+ */
+export function balanceDeltas(t: FinanceTransaction): [string, number][] {
+    const amount = Number(t.amount);
+    const out: [string, number][] = [[t.payer_id, amount]];
+    if (t.type === 'expense') {
+        t.splits?.forEach(s => out.push([s.member_id, -Number(s.split_amount)]));
+    } else if (t.receiver_id) {
+        out.push([t.receiver_id, -amount]);
+    }
+    return out;
+}
+
 // Global State
 const members = ref<FinanceMember[]>([]);
 const categories = ref<FinanceCategory[]>([]);
@@ -371,39 +388,15 @@ export function useFinance() {
 
     // --- Computed Logic ---
 
-    // Calculate Balances
-    // Positive = Member receives money (paid more than consumed)
-    // Negative = Member owes money (consumed more than paid)
+    // Balance: positive = member gets money back (paid more than consumed),
+    // negative = member owes money (consumed more than paid).
     const balances = computed(() => {
         const raw: Record<string, number> = {};
         members.value.forEach(m => raw[m.id] = 0);
 
         transactions.value.forEach(t => {
-            const amount = Number(t.amount); // Ensure number
-
-            if (t.type === 'expense') {
-                // Payer gets +Amount (they paid for it)
-                if (raw[t.payer_id] !== undefined) raw[t.payer_id] += amount;
-
-                // Consumers get -SplitAmount (they consumed it)
-                if (t.splits) {
-                    t.splits.forEach(s => {
-                        if (raw[s.member_id] !== undefined) raw[s.member_id] -= Number(s.split_amount);
-                    });
-                }
-            } else if (t.type === 'payment') {
-                // Payment: Payer gives money to Receiver
-                // Current view: Payer settles debt -> Payer gets + (debt reduced), Receiver gets - (claim reduced)?
-                // Wait, standard accounting:
-                // Payer gives 50€. 
-                // Payer 'paid' 50€ (credit). Receiver 'received' 50€ (debit/consumption logic?).
-
-                // Simpler View: Who owes the "Group"?
-                // If I owe 50€ to Group, and I pay 50€ to Alice (who is +50€), 
-                // My balance should go up +50 (to 0). Alice's balance should go down -50 (to 0).
-
-                if (raw[t.payer_id] !== undefined) raw[t.payer_id] += amount;
-                if (t.receiver_id && raw[t.receiver_id] !== undefined) raw[t.receiver_id] -= amount;
+            for (const [id, delta] of balanceDeltas(t)) {
+                if (raw[id] !== undefined) raw[id] += delta;
             }
         });
 
