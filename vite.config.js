@@ -47,6 +47,8 @@ export default defineConfig({
       workbox: {
         // Chunks are split per route now; precache them all for offline starts.
         globPatterns: ['**/*.{js,css,html,woff2,png,ico,svg}'],
+        // `push` + `notificationclick` handlers (Web-Push, see public/push-sw.js).
+        importScripts: ['push-sw.js'],
       },
     })],
   build: {

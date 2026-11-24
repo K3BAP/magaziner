@@ -18,6 +18,7 @@ import { useChangelog } from './composables/useChangelog';
 import { useKeyboardInset } from './composables/useKeyboardInset';
 import { useTheme } from './composables/useTheme';
 import { useActiveMembers } from './composables/useHouseholdMembers';
+import { usePush } from './composables/usePush';
 import TheAppBar from './components/layout/TheAppBar.vue';
 import TheTabBar from './components/layout/TheTabBar.vue';
 import ChangelogModal from './components/ChangelogModal.vue';
@@ -88,6 +89,8 @@ watch(
       refetchAllData();
       realtime.start(activeHouseholdId.value);
       bootstrapChangelog();
+      // Re-link this device's push subscription to whoever is signed in.
+      usePush().refresh();
     } else {
       realtime.stop();
       clearHouseholds();

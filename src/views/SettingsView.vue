@@ -20,11 +20,13 @@ import {
   ComputerDesktopIcon,
   SparklesIcon,
   InformationCircleIcon,
+  BellIcon,
 } from '@heroicons/vue/24/outline';
 import { useChangelog, CURRENT_VERSION } from '../composables/useChangelog';
 import { confirmDialog } from '../composables/useConfirm';
 import { toast } from '../composables/useToast';
 import { authErrorMessage } from '../utils/authErrors';
+import { usePush, isIos, isStandalone } from '../composables/usePush';
 
 const router = useRouter();
 const { user, signOut, updatePassword, deleteAccount } = useAuth();
@@ -37,6 +39,22 @@ const THEME_OPTIONS = [
 ] as const;
 const { openAll: openChangelog } = useChangelog();
 const appVersion = CURRENT_VERSION;
+
+// --- Push notifications (this device only) ---
+const push = usePush();
+const pushOn = push.subscribed;
+const pushBusy = push.busy;
+const pushPermission = push.permission;
+const pushSupported = push.supported;
+const showIosHint = !pushSupported && isIos && !isStandalone;
+push.refresh();
+
+const onTogglePush = async (e: Event) => {
+  const el = e.target as HTMLInputElement;
+  await (el.checked ? push.enable() : push.disable());
+  // The checkbox flips itself; snap it back to the real state if that failed.
+  el.checked = pushOn.value;
+};
 
 // --- Profile (display name) ---
 const displayName = ref(profile.value?.display_name ?? '');
@@ -226,6 +244,53 @@ const onDeleteAccount = async () => {
             {{ o.label }}
           </button>
         </div>
+      </div>
+    </section>
+
+    <!-- Benachrichtigungen -->
+    <section class="surface">
+      <div class="p-5">
+        <div class="flex items-center gap-2 mb-4">
+          <BellIcon class="h-5 w-5 text-primary" />
+          <h2 class="text-sm uppercase tracking-wider font-semibold text-base-content/60">Benachrichtigungen</h2>
+        </div>
+
+        <template v-if="pushSupported">
+          <label class="flex items-start justify-between gap-4 cursor-pointer">
+            <span>
+              <span class="block font-semibold">Neue Ausgaben und Zahlungen</span>
+              <span class="block text-xs text-base-content/60 mt-0.5">
+                Du bekommst eine Nachricht, wenn jemand anderes im Haushalt etwas in Finanzen einträgt.
+                Gilt nur für dieses Gerät.
+              </span>
+            </span>
+            <span class="flex items-center gap-2 shrink-0 mt-0.5">
+              <span v-if="pushBusy" class="loading loading-spinner loading-xs" />
+              <input
+                type="checkbox"
+                class="toggle toggle-primary"
+                :checked="pushOn"
+                :disabled="pushBusy || pushPermission === 'denied'"
+                aria-label="Benachrichtigungen"
+                @change="onTogglePush"
+              />
+            </span>
+          </label>
+          <p v-if="pushPermission === 'denied'" class="text-xs text-warning mt-3">
+            Dein Browser blockiert Benachrichtigungen für Magaziner. Erlaube sie in den
+            Website-Einstellungen des Browsers, dann kannst du sie hier einschalten.
+          </p>
+        </template>
+
+        <p v-else-if="showIosHint" class="text-sm text-base-content/70">
+          Auf iPhone und iPad gehen Benachrichtigungen nur, wenn du Magaziner zum Home-Bildschirm
+          hinzufügst (ab iOS 16.4): In Safari auf <strong>Teilen</strong> tippen →
+          <strong>Zum Home-Bildschirm</strong>, dann die App von dort öffnen und hier einschalten.
+        </p>
+
+        <p v-else class="text-sm text-base-content/70">
+          Dieser Browser unterstützt keine Benachrichtigungen.
+        </p>
       </div>
     </section>
 

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { supabase } from '../supabase'
 import type { User } from '@supabase/supabase-js'
 import { useProfile } from './useProfile'
+import { forgetPushOnThisDevice } from './usePush'
 
 // Globaler State (außerhalb der Funktion, damit er überall gleich ist)
 const user = ref<User | null>(null)
@@ -58,6 +59,8 @@ export function useAuth() {
 
   // 3. Ausloggen
   const signOut = async () => {
+    // Still signed in here, so RLS lets us drop this device's push row.
+    await forgetPushOnThisDevice()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     user.value = null

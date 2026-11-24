@@ -30,6 +30,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.2.0',
+    date: '2026-11-24',
+    title: 'Benachrichtigungen',
+    items: [
+      'Neu in Einstellungen → Benachrichtigungen: Schalte Push-Nachrichten ein und du erfährst sofort, wenn jemand anderes im Haushalt eine Ausgabe oder Zahlung einträgt. Ein Tipp auf die Nachricht öffnet Finanzen.',
+      'Der Schalter gilt pro Gerät. Auf iPhone und iPad klappt es, sobald du Magaziner zum Home-Bildschirm hinzugefügt hast (ab iOS 16.4).',
+    ],
+  },
+  {
     version: '2.1.0',
     date: '2026-11-19',
     title: 'Schulden-Verlauf',

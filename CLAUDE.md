@@ -67,6 +67,31 @@ trigger a debounced silent re-fetch. DELETE events are unfiltered and only carry
 unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and read by the
 dashboard's activity widget.
 
+### Push notifications
+
+Web-Push, currently only for finance. Flow: `finance_transactions` INSERT → trigger
+`private.trg_finance_push` (skips rows without `auth.uid()`, i.e. seeds/admin SQL) writes an event
+into `private.push_outbox` and `pg_net`-posts `{ event_id }` to the Edge Function `send-push`
+(source in `supabase/functions/send-push/`, deployed with `verify_jwt = false`). The function
+claims the event via `claim_push_event` (`service_role` only — that's the auth: a forged id finds
+nothing), gets the text data plus the `push_subscriptions` of all **other** household members,
+sends with `web-push` and deletes subscriptions that answer 404/410. Logs: `[send-push] …` in the
+function logs.
+
+- Keys: public VAPID key in `.env` as `VITE_VAPID_PUBLIC_KEY`; `VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` are Edge Function secrets (Dashboard → Edge Functions →
+  Secrets). The private key is never committed — locally it sits in the gitignored
+  `supabase/functions/.env.local`. Rotating the keys invalidates every subscription.
+- Client: `usePush.ts` (opt-in per device in Settings, `register_push_subscription` RPC so the
+  same browser can move to another account; `forgetPushOnThisDevice` runs on sign-out;
+  `refresh()` on login re-links the subscription). `Notification.requestPermission()` must be the
+  first await inside the click handler (Safari).
+- Service worker: still `generateSW`; the handlers live in `public/push-sw.js` and are pulled in via
+  `workbox.importScripts`. `npm run dev` registers no service worker, so push can only be tried in
+  a build (`npm run build && npm run preview`) or the deployed app. iOS needs the app on the Home
+  Screen (16.4+); without `PushManager` the Settings section explains that.
+- New push type: add a trigger + event shape and branch in `compose()` in the function.
+
 ### State management
 
 No Pinia or Vuex. All shared state lives in module-level `ref()`s inside composables in `src/composables/`. Each composable owns one feature domain:
@@ -89,6 +114,7 @@ No Pinia or Vuex. All shared state lives in module-level `ref()`s inside composa
 | `useShoppingLists.ts` / `useShoppingCategories.ts` | Multiple lists per household / aisles |
 | `useTodos.ts` | Todos with due date, assignee, recurrence (completing spawns the next one) |
 | `useActivity.ts` | Household activity feed (`activity_log`) |
+| `usePush.ts` | Web-Push opt-in for this device (see Push notifications) |
 | `useRealtime.ts` | One realtime channel per active household |
 | `useToast.ts` / `useConfirm.ts` | App-wide snackbar (with undo) and promise-based confirm sheet |
 | `usePageTitle.ts` | Lets a view override the header title |
