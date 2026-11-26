@@ -91,13 +91,6 @@ begin
     ('00000000-0000-4000-8000-000000000202', v_hh, v_list_b, v_household, 'Duschgel',  true,  v_now - interval '2 min'),
     ('00000000-0000-4000-8000-000000000203', v_hh, v_list_b, v_household, 'Klopapier', false, v_now - interval '3 min');
 
-  insert into public.todos (id, household_id, title, is_completed, due_date, recurrence, assignee_id) values
-    ('00000000-0000-4000-8000-000000000301', v_hh, 'Bad putzen',        false, null,               null,     null),
-    ('00000000-0000-4000-8000-000000000302', v_hh, 'Müll rausbringen',  true,  null,               'weekly', null),
-    ('00000000-0000-4000-8000-000000000303', v_hh, 'Pfand wegbringen',  false, current_date - 2,   null,     v_user),
-    ('00000000-0000-4000-8000-000000000304', v_hh, 'Blumen gießen',     false, current_date,       'weekly', null),
-    ('00000000-0000-4000-8000-000000000305', v_hh, 'Steuer vorbereiten', false, current_date + 10, null,     null);
-
   -- Aufgaben 3.0: Räume, Chores in jedem Frische-Zustand und jedem Zuteilungs-Modus,
   -- Verlauf über drei Tage (Streak 3, 95 XP → die nächste Erledigung ≥ 5 XP ist ein Level-Up).
   insert into public.chore_areas (id, household_id, name, emoji, sort) values

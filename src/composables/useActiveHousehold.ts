@@ -29,7 +29,7 @@ export function useActiveHousehold() {
  * must be dropped, or they would overwrite the new household's data.
  *
  *   const isCurrent = householdSnapshot();
- *   const { data } = await supabase.from('todos').select();
+ *   const { data } = await supabase.from('chores').select();
  *   if (!isCurrent()) return;
  */
 export function householdSnapshot(): () => boolean {

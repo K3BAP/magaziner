@@ -64,7 +64,7 @@ When the active household changes, `App.vue` clears every domain store and re-fe
 `useRealtime.ts` opens one Supabase Realtime channel per active household (tables in the
 `supabase_realtime` publication: `shopping_list`, `shopping_lists`, `chores`, `chore_completions`,
 `chore_areas`, `chore_kudos`, `household_game_state`, `rewards`, `reward_redemptions`, `items`, `item_instances`,
-`activity_log`; `todos` is legacy). Shopping and chore changes are applied row by row
+`activity_log`). Shopping and chore changes are applied row by row
 (`applyRemote` in the composables, idempotent because our own writes echo back); inventory changes
 trigger a debounced silent re-fetch. DELETE events are unfiltered and only carry the id — ignore
 unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and the game RPCs
@@ -165,7 +165,6 @@ No Pinia or Vuex. All shared state lives in module-level `ref()`s inside composa
 | `useChores.ts` | Chores, rooms (`chore_areas`), recent completions; complete/undo via RPC, realtime apply |
 | `useGame.ts` | `game_status()`: per member XP/level/coins/streak/badges/away, team energy, weekly goal, quests, recap; vacation RPCs; `member_stats`; reward events for the „+XP“ burst and level-up sheet |
 | `useRewards.ts` | Shop: rewards CRUD, vouchers (redeem / fulfil / cancel via RPC), realtime apply |
-| `useTodos.ts` | Legacy to-do list, no longer used (removed in M5 of the gamification plan) |
 | `useActivity.ts` | Household activity feed (`activity_log`) |
 | `usePush.ts` | Web-Push opt-in for this device (see Push notifications) |
 | `useRealtime.ts` | One realtime channel per active household |
@@ -197,7 +196,7 @@ fallback route for the header's back arrow. Routes are lazy-loaded except the da
 - `src/components/ui/` — shared primitives: `BottomSheet` (**the** modal — never use daisyUI `modal`/`<dialog>` or `alert`/`confirm`), `ToastHost`, `ConfirmHost`, `AppFab`, `SwipeRow`, `Stepper`, `EmptyState`, `SectionHeader`, `Skeleton`, `UserAvatar`, `BrandMark`, `OfflineBanner`.
 - `src/components/chores/` — Aufgaben: `ChoreRow` (freshness bar + XP chip), `ChoreSheet` (editor), `TeamCard`, `LevelAvatar`, `RoomGrid`, `QuestBoard` (goal, quests, streak, badges), `VacationSheet`, `WeeklyRecapSheet`, `OnboardingSheet` (intro + starter templates from `src/data/choreTemplates.ts`), `RewardBurst` + `LevelUpSheet` (mounted once in `App.vue`), `RewardShop` + `RewardSheet`, `ProfileSheet`
   (tap an avatar in the team card). The view switches list/rooms/quests/shop via `?view=`; kudos live in the list's Verlauf.
-- `src/components/inventory/`, `shopping/`, `todos/` — feature sheets (item form/detail, location, categories, shopping item edit, stock-from-shopping; `todos/` is legacy).
+- `src/components/inventory/`, `shopping/` — feature sheets (item form/detail, location, categories, shopping item edit, stock-from-shopping).
 - `src/components/ChangelogModal.vue` — the "What's new" sheet driven by `useChangelog`; entries with `highlights` get a page-by-page tour first.
 
 ### Styling

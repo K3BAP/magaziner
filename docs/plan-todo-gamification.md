@@ -1,6 +1,6 @@
 # Aufgaben 3.0 – Gamification-Plan
 
-Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1 (2.3.0), M2 (2.4.0) und M3 (2.5.0) ausgeliefert · M4 (2.6.0) umgesetzt, noch nicht committet**
+Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1–M5 umgesetzt (2.3.0–2.6.0) · offen: Balance nach 2–3 Wochen echter Nutzung**
 
 Ziel: Aus der einfachen To-do-Liste wird ein Haushalts-Spiel, das zum Mitmachen motiviert:
 XP und Level pro Person, ein gemeinsames Wochenziel, Quests, Abzeichen, eine Team-Energie,
@@ -458,6 +458,11 @@ Arten durch die deployte Function (HTTP 200) und die Empfänger-Filter per SQL; 
 **M5 – Aufräumen**
 - Nach Rückfrage: `todos`-Tabelle samt Trigger und Publikation löschen, `useTodos.ts`/`TodoRow.vue`/`TodoSheet.vue`
   entfernen, Doku finalisieren, Balance-Werte nach 2–3 Wochen echter Nutzung nachjustieren.
+
+*Stand M5:* Am 2026-11-26 nach Rückfrage umgesetzt: Tabelle `todos` gelöscht (Migration `chores_gamification_m5_drop_todos`,
+die 4 alten Einträge ohne Sicherung, so entschieden), `private.trg_done_activity` dient nur noch der Einkaufsliste,
+der alte Client-Code ist entfernt. Route und Widget-Typ heißen weiter `todos`, weil gespeicherte Dashboard-Layouts
+und Links darauf zeigen. Offen bleibt nur die Balance (siehe 7.).
 
 ---
 
