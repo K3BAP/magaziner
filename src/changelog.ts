@@ -30,6 +30,26 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.3.0',
+    date: '2026-11-26',
+    title: 'Aufgaben als Spiel',
+    items: [
+      'Aufgaben haben jetzt einen eigenen Tab unten in der Leiste. Die Vorräte findest du unter „Mehr“.',
+      'Wiederkehrende Aufgaben haben einen Frische-Balken statt fester Termine: grün heißt frisch, rot heißt höchste Zeit. Wer erledigt, setzt den Balken zurück.',
+      'Für jede Aufgabe gibt es XP je nach Aufwand (Mini 5 bis Groß 40) und Münzen. Pünktlich erledigt gibt es +25 %, für unbeliebte Aufgaben +50 %, und wer eine überfällige Aufgabe einer anderen Person rettet, bekommt +50 %.',
+      'Mit XP steigst du im Level auf. Oben siehst du dein Level, deine Tage in Folge und wie viel ihr diese Woche gemeinsam geschafft habt.',
+      'Wiederkehrende Aufgaben können abwechselnd, fair (dran ist, wer diese Woche am wenigsten gemacht hat), fest oder offen verteilt werden.',
+      'Aufgaben lassen sich Räumen zuordnen. Ein Startpaket mit typischen Haushaltsaufgaben hilft beim Einrichten.',
+      'Versehentlich abgehakt? Im Verlauf kannst du deine Erledigungen 24 Stunden lang rückgängig machen.',
+    ],
+    highlights: [
+      { icon: '✅', title: 'Aufgaben im Tab', text: 'Die Aufgaben sind jetzt direkt unten in der Leiste. Die Vorräte findest du unter „Mehr“.' },
+      { icon: '🫧', title: 'Frische statt Termine', text: 'Jede wiederkehrende Aufgabe hat einen Balken von grün bis rot. Wer sie erledigt, setzt ihn zurück.' },
+      { icon: '⭐', title: 'XP & Level', text: 'Jede Aufgabe bringt XP und Münzen. Pünktlich, unbeliebt oder gerettet gibt es einen Bonus.' },
+      { icon: '🤝', title: 'Fair verteilt', text: 'Aufgaben gehen reihum oder an die Person, die diese Woche am wenigsten gemacht hat.' },
+    ],
+  },
+  {
     version: '2.2.0',
     date: '2026-11-24',
     title: 'Benachrichtigungen',

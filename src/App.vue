@@ -3,7 +3,8 @@ import { computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuth } from './composables/useAuth';
 import { useInventory } from './composables/useInventory';
-import { useTodos } from './composables/useTodos';
+import { useChores } from './composables/useChores';
+import { useGame } from './composables/useGame';
 import { useShoppingList } from './composables/useShoppingList';
 import { useShoppingLists } from './composables/useShoppingLists';
 import { useShoppingCategories } from './composables/useShoppingCategories';
@@ -25,6 +26,8 @@ import ChangelogModal from './components/ChangelogModal.vue';
 import ToastHost from './components/ui/ToastHost.vue';
 import ConfirmHost from './components/ui/ConfirmHost.vue';
 import OfflineBanner from './components/ui/OfflineBanner.vue';
+import RewardBurst from './components/chores/RewardBurst.vue';
+import LevelUpSheet from './components/chores/LevelUpSheet.vue';
 
 // Track the on-screen keyboard once for the whole app (publishes --keyboard-inset).
 useKeyboardInset();
@@ -34,7 +37,8 @@ useTheme();
 const route = useRoute();
 const { user, isAuthReady } = useAuth();
 const inventory = useInventory();
-const todos = useTodos();
+const chores = useChores();
+const game = useGame();
 const shoppingItems = useShoppingList();
 const shoppingLists = useShoppingLists();
 const shoppingCategories = useShoppingCategories();
@@ -60,7 +64,8 @@ const refetchShopping = async () => {
 
 const refetchAllData = () => {
   inventory.fetchInventory();
-  todos.fetchTodos();
+  chores.fetchChores();
+  game.fetchStatus();
   recipes.fetchRecipes();
   finance.fetchMembers();
   finance.fetchCategories();
@@ -72,7 +77,8 @@ const refetchAllData = () => {
 
 const clearAllData = () => {
   inventory.clearInventory();
-  todos.clearTodos();
+  chores.clearChores();
+  game.clearGame();
   shoppingItems.clearItems();
   shoppingLists.clearLists();
   shoppingCategories.clearCategories();
@@ -156,6 +162,8 @@ onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisibil
 
   <ToastHost />
   <ConfirmHost />
+  <RewardBurst />
+  <LevelUpSheet />
 </template>
 
 <style scoped>

@@ -3,39 +3,35 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   HomeIcon,
-  ArchiveBoxIcon,
+  CheckCircleIcon,
   ShoppingCartIcon,
   BanknotesIcon,
   Squares2X2Icon,
 } from '@heroicons/vue/24/outline';
 import {
   HomeIcon as HomeSolid,
-  ArchiveBoxIcon as ArchiveSolid,
+  CheckCircleIcon as CheckSolid,
   ShoppingCartIcon as CartSolid,
   BanknotesIcon as BanknotesSolid,
   Squares2X2Icon as SquaresSolid,
 } from '@heroicons/vue/24/solid';
 import { useShoppingList } from '../../composables/useShoppingList';
-import { useTodos } from '../../composables/useTodos';
-import { daysUntil } from '../../utils/date';
+import { useChores } from '../../composables/useChores';
 import MoreSheet from './MoreSheet.vue';
 import { keyboardOpen } from '../../composables/useKeyboardInset';
 
 const route = useRoute();
 const router = useRouter();
 const { items: shoppingItems } = useShoppingList();
-const { openTodos } = useTodos();
+const { dueForMe } = useChores();
 
 const showMore = ref(false);
 
 const openShopping = computed(() => shoppingItems.value.filter((i) => !i.is_completed).length);
-const dueTodos = computed(
-  () => openTodos.value.filter((t) => t.due_date && daysUntil(t.due_date) <= 0).length,
-);
 
 const tabs = computed(() => [
   { key: 'dashboard', label: 'Übersicht', to: 'dashboard', icon: HomeIcon, active: HomeSolid, badge: 0 },
-  { key: 'inventory', label: 'Vorräte', to: 'locations', icon: ArchiveBoxIcon, active: ArchiveSolid, badge: 0 },
+  { key: 'tasks', label: 'Aufgaben', to: 'todos', icon: CheckCircleIcon, active: CheckSolid, badge: dueForMe.value.length },
   { key: 'shopping', label: 'Einkauf', to: 'shoppingList', icon: ShoppingCartIcon, active: CartSolid, badge: openShopping.value },
   { key: 'finance', label: 'Finanzen', to: 'finance', icon: BanknotesIcon, active: BanknotesSolid, badge: 0 },
 ]);
@@ -99,7 +95,6 @@ onBeforeUnmount(() => {
       >
         <span class="relative">
           <component :is="current === 'more' ? SquaresSolid : Squares2X2Icon" class="h-6 w-6" />
-          <span v-if="dueTodos > 0" class="badge-dot">{{ dueTodos }}</span>
         </span>
         <span class="text-[11px] font-semibold">Mehr</span>
       </button>

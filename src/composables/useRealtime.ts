@@ -3,7 +3,7 @@ import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/
 import { supabase } from '../supabase';
 import { useShoppingList } from './useShoppingList';
 import { useShoppingLists } from './useShoppingLists';
-import { useTodos } from './useTodos';
+import { useChores } from './useChores';
 import { useInventory } from './useInventory';
 import { useActivity, type ActivityEntry } from './useActivity';
 
@@ -34,12 +34,13 @@ type Payload = RealtimePostgresChangesPayload<Record<string, any>>;
 export function useRealtime() {
   const shopping = useShoppingList();
   const lists = useShoppingLists();
-  const todos = useTodos();
+  const chores = useChores();
   const inventory = useInventory();
   const activity = useActivity();
 
   const refetchInventory = debounce(() => inventory.fetchInventory({ silent: true }), 400);
   const refetchLists = debounce(() => lists.fetchLists({ silent: true }), 400);
+  const refetchAreas = debounce(() => chores.fetchAreas(), 400);
 
   const stop = async () => {
     if (channel) {
@@ -71,7 +72,9 @@ export function useRealtime() {
 
     on('shopping_list', (p) => shopping.applyRemote(p.eventType, p.new as any, p.old as any));
     on('shopping_lists', () => refetchLists());
-    on('todos', (p) => todos.applyRemote(p.eventType, p.new as any, p.old as any));
+    on('chores', (p) => chores.applyRemote(p.eventType, p.new as any, p.old as any));
+    on('chore_completions', (p) => chores.applyRemoteCompletion(p.eventType, p.new as any, p.old as any));
+    on('chore_areas', () => refetchAreas());
     on('items', (p) => {
       // Deletes of unknown rows (other households) are ignored.
       if (p.eventType === 'DELETE' && !inventory.items.value.some((i) => i.id === (p.old as any)?.id)) return;
@@ -87,7 +90,9 @@ export function useRealtime() {
     });
     on('activity_log', (p) => {
       if (p.eventType === 'INSERT') activity.pushEntry(p.new as ActivityEntry);
-    }, false);
+      // Undoing a chore removes its activity line.
+      else if (p.eventType === 'DELETE') activity.dropEntry((p.old as any)?.id);
+    });
 
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') realtimeStatus.value = 'live';

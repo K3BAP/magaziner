@@ -10,7 +10,7 @@ declare module 'vue-router' {
     /** Static header title; views can override via usePageTitle(). */
     title?: string;
     /** Which bottom tab is highlighted. */
-    tab?: 'dashboard' | 'inventory' | 'shopping' | 'finance' | 'more';
+    tab?: 'dashboard' | 'tasks' | 'shopping' | 'finance' | 'more';
     /** Route name the header back arrow falls back to. */
     back?: string;
   }

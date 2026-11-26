@@ -26,7 +26,8 @@ touching it, the project has an isolated test fixture.
 The pieces:
 
 - `scripts/seed-test-data.sql` — idempotent fixture (test household, two shopping lists with
-  checked and unchecked entries, aisles, todos with due dates/recurrence, two locations with products
+  checked and unchecked entries, aisles, chores in every freshness state and assignment mode with
+  three days of completions (95 XP, streak 3 — the next completion is a level-up), two locations with products
   in every expiry state, finance people/categories/transactions, a recipe whose description
   deliberately contains `<img onerror>` to check sanitising). Run it via the Supabase MCP `execute_sql`; it runs
   privileged and bypasses RLS, so no service-role key is needed. It resolves the test user by
@@ -53,19 +54,32 @@ fixture.
 
 ### Multi-household model
 
-Every domain row (items, todos, shopping list, recipes, finance transactions, …) belongs to a `household_id`, not a `user_id`. A user is a member of one or more households via the `household_members` join table and has exactly one **active household** at a time, stored as `user_profiles.active_household_id`. RLS policies on domain tables clip reads/writes to the caller's **active** household via the `SECURITY DEFINER` helper `private.is_active_household(hid)` (membership-only tables like `household_members` use membership checks). So a plain `select('*')` already returns only the active household's rows. Household-owner-only RPCs (invite creation, member removal, ownership transfer, account deletion) live in `public` schema as `SECURITY DEFINER` functions with `EXECUTE` revoked from `anon`.
+Every domain row (items, chores, shopping list, recipes, finance transactions, …) belongs to a `household_id`, not a `user_id`. A user is a member of one or more households via the `household_members` join table and has exactly one **active household** at a time, stored as `user_profiles.active_household_id`. RLS policies on domain tables clip reads/writes to the caller's **active** household via the `SECURITY DEFINER` helper `private.is_active_household(hid)` (membership-only tables like `household_members` use membership checks). So a plain `select('*')` already returns only the active household's rows. Household-owner-only RPCs (invite creation, member removal, ownership transfer, account deletion) live in `public` schema as `SECURITY DEFINER` functions with `EXECUTE` revoked from `anon`.
 
 When the active household changes, `App.vue` clears every domain store and re-fetches (watcher on `activeHouseholdId`). Every fetch takes a `householdSnapshot()` (from `useActiveHousehold.ts`) before awaiting and drops the response if the household changed meanwhile. Inserts must include `household_id: activeHouseholdId.value`; there is no DB-side trigger filling it anymore.
 
 ### Realtime and activity
 
 `useRealtime.ts` opens one Supabase Realtime channel per active household (tables in the
-`supabase_realtime` publication: `shopping_list`, `shopping_lists`, `todos`, `items`,
-`item_instances`, `activity_log`). Shopping and todo changes are applied row by row
+`supabase_realtime` publication: `shopping_list`, `shopping_lists`, `chores`, `chore_completions`,
+`chore_areas`, `items`, `item_instances`, `activity_log`; `todos` is legacy). Shopping and chore changes are applied row by row
 (`applyRemote` in the composables, idempotent because our own writes echo back); inventory changes
 trigger a debounced silent re-fetch. DELETE events are unfiltered and only carry the id — ignore
-unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and read by the
-dashboard's activity widget.
+unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and the
+`complete_chore` RPC, and read by the dashboard's activity widget.
+
+### Aufgaben (chores) and the game
+
+Plan and rules: `docs/plan-todo-gamification.md`. Recurring chores have `interval_days` + `next_due`
+(freshness = how far into the interval we are), one-off chores an optional `due_date`. Completing
+always goes through `complete_chore(p_chore_id)` (SECURITY DEFINER): it computes XP/coins, writes
+`chore_completions` + `game_ledger`, advances `next_due`, rotates `current_assignee`
+(`fixed`/`rotate`/`fair`/`open`), recomputes the streak in `game_member_state` and logs activity.
+`undo_chore_completion` reverts the doer's own completion within 24 h. `game_ledger`,
+`chore_completions` and `game_member_state` have select-only RLS — never write them from the client.
+XP and coin balances are `SUM()`s over the ledger; `game_status()` returns them per member.
+The reward formula lives in SQL and is mirrored in `src/utils/game.ts` (`xpPreview`) for the
+"+XP" chip — change both together. "Löschen" archives (`archived_at`) so history stays linked.
 
 ### Push notifications
 
@@ -112,7 +126,9 @@ No Pinia or Vuex. All shared state lives in module-level `ref()`s inside composa
 | `useRecipes.ts` | Recipe CRUD + photo upload (`recipe-images` bucket, path `{household_id}/…`) |
 | `useShoppingList.ts` | Entries of the active list: add/edit/delete with undo, autocomplete history, realtime apply |
 | `useShoppingLists.ts` / `useShoppingCategories.ts` | Multiple lists per household / aisles |
-| `useTodos.ts` | Todos with due date, assignee, recurrence (completing spawns the next one) |
+| `useChores.ts` | Chores, rooms (`chore_areas`), recent completions; complete/undo via RPC, realtime apply |
+| `useGame.ts` | `game_status()` per member (XP, level, coins, streak), reward events for the „+XP“ burst and level-up sheet |
+| `useTodos.ts` | Legacy to-do list, no longer used (removed in M5 of the gamification plan) |
 | `useActivity.ts` | Household activity feed (`activity_log`) |
 | `usePush.ts` | Web-Push opt-in for this device (see Push notifications) |
 | `useRealtime.ts` | One realtime channel per active household |
@@ -142,7 +158,8 @@ fallback route for the header's back arrow. Routes are lazy-loaded except the da
 - `src/components/widgets/` — dashboard widget types (all wrap `WidgetShell.vue`: surface card + tinted icon chip + title + slot; counters use `WidgetStat.vue`). Rendered dynamically by `DashboardView.vue` from the user's layout; chart widgets are async components. Add a new widget by: writing the `Widget*.vue`, adding its type string to `WidgetType` in `useDashboard.ts`, registering it in `WIDGET_REGISTRY` in `DashboardView.vue`, and adding a catalog entry in `WidgetGallery.vue`'s `SECTIONS`.
 - `src/components/layout/` — `TheAppBar` (title, back arrow, `#header-actions` teleport target, avatar), `TheTabBar` (bottom navigation, publishes `--tabbar-h`), `MoreSheet`.
 - `src/components/ui/` — shared primitives: `BottomSheet` (**the** modal — never use daisyUI `modal`/`<dialog>` or `alert`/`confirm`), `ToastHost`, `ConfirmHost`, `AppFab`, `SwipeRow`, `Stepper`, `EmptyState`, `SectionHeader`, `Skeleton`, `UserAvatar`, `BrandMark`, `OfflineBanner`.
-- `src/components/inventory/`, `shopping/`, `todos/` — feature sheets (item form/detail, location, categories, shopping item edit, stock-from-shopping, todo editor).
+- `src/components/chores/` — Aufgaben: `ChoreRow` (freshness bar + XP chip), `ChoreSheet` (editor), `TeamCard`, `LevelAvatar`, `OnboardingSheet` (intro + starter templates from `src/data/choreTemplates.ts`), `RewardBurst` + `LevelUpSheet` (mounted once in `App.vue`).
+- `src/components/inventory/`, `shopping/`, `todos/` — feature sheets (item form/detail, location, categories, shopping item edit, stock-from-shopping; `todos/` is legacy).
 - `src/components/ChangelogModal.vue` — the "What's new" sheet driven by `useChangelog`; entries with `highlights` get a page-by-page tour first.
 
 ### Styling

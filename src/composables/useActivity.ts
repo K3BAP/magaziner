@@ -4,7 +4,7 @@ import { householdSnapshot } from './useActiveHousehold';
 
 /**
  * Household-wide activity feed. Rows are written by DB triggers on
- * item_instances / todos / shopping_list (see migration v2_activity_log), so
+ * item_instances / shopping_list (v2_activity_log) and by `complete_chore`, so
  * every member sees who did what, on every device.
  */
 
@@ -49,11 +49,15 @@ export function useActivity() {
     entries.value = [row, ...entries.value].slice(0, LIMIT);
   };
 
+  const dropEntry = (id: string | undefined) => {
+    if (id) entries.value = entries.value.filter((e) => e.id !== id);
+  };
+
   const clearActivity = () => {
     entries.value = [];
   };
 
-  return { entries, loading, fetchActivity, pushEntry, clearActivity };
+  return { entries, loading, fetchActivity, pushEntry, dropEntry, clearActivity };
 }
 
 export const ACTIVITY_VERB: Record<ActivityKind, string> = {

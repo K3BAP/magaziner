@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-  CheckCircleIcon,
+  ArchiveBoxIcon,
   BookOpenIcon,
   Cog6ToothIcon,
   ArrowRightStartOnRectangleIcon,
@@ -12,7 +12,7 @@ import {
   QrCodeIcon,
 } from '@heroicons/vue/24/outline';
 import BottomSheet from '../ui/BottomSheet.vue';
-import { useTodos } from '../../composables/useTodos';
+import { useInventory } from '../../composables/useInventory';
 import { useHouseholds } from '../../composables/useHouseholds';
 import { useActiveHousehold } from '../../composables/useActiveHousehold';
 import { useAuth } from '../../composables/useAuth';
@@ -22,7 +22,7 @@ import { toast } from '../../composables/useToast';
 const open = defineModel<boolean>('open', { required: true });
 
 const router = useRouter();
-const { openCount } = useTodos();
+const { items } = useInventory();
 const { households, switchHousehold } = useHouseholds();
 const { activeHouseholdId } = useActiveHousehold();
 const { user, signOut } = useAuth();
@@ -33,7 +33,7 @@ const go = (name: string) => {
 };
 
 const tiles = computed(() => [
-  { name: 'todos', label: 'Aufgaben', icon: CheckCircleIcon, hint: openCount.value ? `${openCount.value} offen` : 'Alles erledigt', tone: 'text-success bg-success/10' },
+  { name: 'locations', label: 'Vorräte', icon: ArchiveBoxIcon, hint: items.value.length ? `${items.value.length} Produkte` : 'Orte & Produkte', tone: 'text-success bg-success/10' },
   { name: 'recipes', label: 'Rezepte', icon: BookOpenIcon, hint: 'Kochbuch', tone: 'text-accent bg-accent/10' },
   { name: 'allItems', label: 'Produktsuche', icon: MagnifyingGlassIcon, hint: 'Alle Vorräte', tone: 'text-info bg-info/10' },
   { name: 'scanner', label: 'Scannen', icon: QrCodeIcon, hint: 'Barcode erfassen', tone: 'text-secondary-content bg-secondary/30' },

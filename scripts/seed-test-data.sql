@@ -98,6 +98,44 @@ begin
     ('00000000-0000-4000-8000-000000000304', v_hh, 'Blumen gießen',     false, current_date,       'weekly', null),
     ('00000000-0000-4000-8000-000000000305', v_hh, 'Steuer vorbereiten', false, current_date + 10, null,     null);
 
+  -- Aufgaben 3.0: Räume, Chores in jedem Frische-Zustand und jedem Zuteilungs-Modus,
+  -- Verlauf über drei Tage (Streak 3, 95 XP → die nächste Erledigung ≥ 5 XP ist ein Level-Up).
+  insert into public.chore_areas (id, household_id, name, emoji, sort) values
+    ('00000000-0000-4000-8000-000000000a01', v_hh, 'Küche', '🍳', 0),
+    ('00000000-0000-4000-8000-000000000a02', v_hh, 'Bad',   '🛁', 1);
+
+  insert into public.chores (id, household_id, title, area_id, kind, interval_days, next_due, due_date, effort, unpopular, assign_mode, rotation, current_assignee, completed_at, last_done_at, last_done_by) values
+    -- heute fällig, abwechselnd
+    ('00000000-0000-4000-8000-000000000b01', v_hh, 'Spülmaschine ausräumen', '00000000-0000-4000-8000-000000000a01', 'recurring', 1,  current_date,      null, 'mini',   false, 'rotate', array[v_user], v_user, null, null, null),
+    -- frisch (ratio 2/7), offen
+    ('00000000-0000-4000-8000-000000000b02', v_hh, 'Herd putzen',            '00000000-0000-4000-8000-000000000a01', 'recurring', 7,  current_date + 5,  null, 'small',  false, 'open',   '{}',          null,   null, null, null),
+    -- bald (ratio 12/14), fair
+    ('00000000-0000-4000-8000-000000000b03', v_hh, 'Kühlschrank aufräumen',  '00000000-0000-4000-8000-000000000a01', 'recurring', 14, current_date + 2,  null, 'medium', false, 'fair',   array[v_user], v_user, null, null, null),
+    -- seit gestern fällig (orange), fest, unbeliebt
+    ('00000000-0000-4000-8000-000000000b04', v_hh, 'Toilette putzen',        '00000000-0000-4000-8000-000000000a02', 'recurring', 7,  current_date - 1,  null, 'small',  true,  'fixed',  '{}',          v_user, null, null, null),
+    -- überfällig (rot), offen → Rettungs-Bonus
+    ('00000000-0000-4000-8000-000000000b05', v_hh, 'Dusche putzen',          '00000000-0000-4000-8000-000000000a02', 'recurring', 7,  current_date - 5,  null, 'medium', true,  'open',   '{}',          null,   null, null, null),
+    -- ganz frisch → „zu früh“ halbiert die XP
+    ('00000000-0000-4000-8000-000000000b06', v_hh, 'Fenster putzen',         null,                                   'recurring', 90, current_date + 80, null, 'large',  false, 'open',   '{}',          null,   null, null, null),
+    -- einmalig: überfällig + mir zugeteilt, später, ohne Datum, erledigt
+    ('00000000-0000-4000-8000-000000000b11', v_hh, 'Pfand wegbringen',       null, 'once', null, null, current_date - 2,  'small', false, 'fixed', '{}', v_user, null, null, null),
+    ('00000000-0000-4000-8000-000000000b12', v_hh, 'Steuer vorbereiten',     null, 'once', null, null, current_date + 10, 'large', false, 'open',  '{}', null,   null, null, null),
+    ('00000000-0000-4000-8000-000000000b13', v_hh, 'Fahrradschloss kaufen',  null, 'once', null, null, null,              'small', false, 'open',  '{}', null,   null, null, null),
+    ('00000000-0000-4000-8000-000000000b14', v_hh, 'Glühbirne wechseln',     null, 'once', null, null, null,              'mini',  false, 'open',  '{}', null,
+      ((current_date - 1) + time '18:00') at time zone 'Europe/Berlin', ((current_date - 1) + time '18:00') at time zone 'Europe/Berlin', v_user);
+
+  insert into public.chore_completions (id, household_id, chore_id, chore_title, area_id, user_id, done_at, xp, coins, effort, flags) values
+    ('00000000-0000-4000-8000-000000000c01', v_hh, '00000000-0000-4000-8000-000000000b02', 'Herd putzen',        '00000000-0000-4000-8000-000000000a01', v_user, ((current_date - 3) + time '19:00') at time zone 'Europe/Berlin', 30, 6, 'small',  '{on_time,unpopular}'),
+    ('00000000-0000-4000-8000-000000000c02', v_hh, null,                                   'Wäsche waschen',     null,                                   v_user, ((current_date - 2) + time '09:30') at time zone 'Europe/Berlin', 25, 5, 'medium', '{on_time}'),
+    ('00000000-0000-4000-8000-000000000c03', v_hh, '00000000-0000-4000-8000-000000000b14', 'Glühbirne wechseln', null,                                   v_user, ((current_date - 1) + time '18:00') at time zone 'Europe/Berlin', 40, 8, 'large',  '{}');
+
+  insert into public.game_ledger (household_id, user_id, xp, coins, reason, ref_id, created_at)
+  select v_hh, v_user, xp, coins, 'chore', id, done_at
+    from public.chore_completions where household_id = v_hh;
+
+  insert into public.game_member_state (household_id, user_id, streak_current, streak_best, streak_last_day)
+  values (v_hh, v_user, 3, 3, current_date - 1);
+
   -- Vorräte (2.0): Orte, Kategorien, Produkte mit allen Ablauf-Zuständen.
   insert into public.locations (id, household_id, name, icon) values
     ('00000000-0000-4000-8000-000000000401', v_hh, 'Kühlschrank',    '❄️'),

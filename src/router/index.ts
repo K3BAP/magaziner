@@ -43,32 +43,32 @@ const router = createRouter({
     {
       path: '/locations', // Neue Route für die Kacheln
       name: 'locations',
-      meta: { requiresAuth: true, title: 'Vorräte', tab: 'inventory' },
+      meta: { requiresAuth: true, title: 'Vorräte', tab: 'more' },
       component: () => import('../views/LocationsView.vue'),
     },
     {
       path: '/scanner',
       name: 'scanner',
-      meta: { requiresAuth: true, title: 'Barcode scannen', tab: 'inventory', back: 'locations' },
+      meta: { requiresAuth: true, title: 'Barcode scannen', tab: 'more', back: 'locations' },
       component: () => import('../views/ScannerAddView.vue'),
     },
     {
       path: '/location/:id',
       name: 'location',
-      meta: { requiresAuth: true, title: 'Vorräte', tab: 'inventory', back: 'locations' },
+      meta: { requiresAuth: true, title: 'Vorräte', tab: 'more', back: 'locations' },
       component: () => import('../views/LocationDetailView.vue'),
       props: true,
     },
     {
       path: '/items',
       name: 'allItems',
-      meta: { requiresAuth: true, title: 'Alle Vorräte', tab: 'inventory', back: 'locations' },
+      meta: { requiresAuth: true, title: 'Alle Vorräte', tab: 'more', back: 'locations' },
       component: () => import('../views/AllItemsView.vue'),
     },
     {
       path: '/todos',
       name: 'todos',
-      meta: { requiresAuth: true, title: 'Aufgaben', tab: 'more' },
+      meta: { requiresAuth: true, title: 'Aufgaben', tab: 'tasks' },
       component: () => import('../views/TodoView.vue'),
     },
     {
