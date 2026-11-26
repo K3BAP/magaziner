@@ -62,7 +62,7 @@ When the active household changes, `App.vue` clears every domain store and re-fe
 
 `useRealtime.ts` opens one Supabase Realtime channel per active household (tables in the
 `supabase_realtime` publication: `shopping_list`, `shopping_lists`, `chores`, `chore_completions`,
-`chore_areas`, `items`, `item_instances`, `activity_log`; `todos` is legacy). Shopping and chore changes are applied row by row
+`chore_areas`, `household_game_state`, `items`, `item_instances`, `activity_log`; `todos` is legacy). Shopping and chore changes are applied row by row
 (`applyRemote` in the composables, idempotent because our own writes echo back); inventory changes
 trigger a debounced silent re-fetch. DELETE events are unfiltered and only carry the id — ignore
 unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and the
@@ -80,6 +80,20 @@ always goes through `complete_chore(p_chore_id)` (SECURITY DEFINER): it computes
 XP and coin balances are `SUM()`s over the ledger; `game_status()` returns them per member.
 The reward formula lives in SQL and is mirrored in `src/utils/game.ts` (`xpPreview`) for the
 "+XP" chip — change both together. "Löschen" archives (`archived_at`) so history stays linked.
+
+Team layer (M2): `household_game_state` holds energy (0–100, coin factor ×1.2 ≥ 80 / ×0.5 < 30),
+the current `week_start`, `weekly_goal_xp` and `goal_streak`. The week rolls over **lazily**:
+`private.ensure_week` (called by `game_status` and `complete_chore`) closes the old week into
+`game_weeks` (the recap), pays the goal bonus and draws three `game_quests`. The pg_cron job
+`magaziner-game-daily` (02:05 UTC) runs `private.game_daily()` — rollover, end-of-pause shifting
+and the once-a-day energy decay — for every household with chores. Quest progress is always
+*computed* from completions (`private.quest_progress`), never counted. Streaks (`private.streak_calc`)
+allow one missed day per ISO week (joker); days in `game_pauses` (member away or whole household,
+`set_away` / `set_household_pause`) bridge without counting. Badges are `user_badges`, awarded in
+`private.award_badges`. Texts for quests/badges live in `src/data/gameCatalog.ts`. To test a
+rollover in SQL, shift the test household's completions, ledger, quests and `week_start` back
+7 days inside `begin; … rollback;` and call `game_status()` as the test user
+(`set_config('request.jwt.claims', …, true)`).
 
 ### Push notifications
 
@@ -127,7 +141,7 @@ No Pinia or Vuex. All shared state lives in module-level `ref()`s inside composa
 | `useShoppingList.ts` | Entries of the active list: add/edit/delete with undo, autocomplete history, realtime apply |
 | `useShoppingLists.ts` / `useShoppingCategories.ts` | Multiple lists per household / aisles |
 | `useChores.ts` | Chores, rooms (`chore_areas`), recent completions; complete/undo via RPC, realtime apply |
-| `useGame.ts` | `game_status()` per member (XP, level, coins, streak), reward events for the „+XP“ burst and level-up sheet |
+| `useGame.ts` | `game_status()`: per member XP/level/coins/streak/badges/away, team energy, weekly goal, quests, recap; vacation RPCs; reward events for the „+XP“ burst and level-up sheet |
 | `useTodos.ts` | Legacy to-do list, no longer used (removed in M5 of the gamification plan) |
 | `useActivity.ts` | Household activity feed (`activity_log`) |
 | `usePush.ts` | Web-Push opt-in for this device (see Push notifications) |
@@ -158,7 +172,7 @@ fallback route for the header's back arrow. Routes are lazy-loaded except the da
 - `src/components/widgets/` — dashboard widget types (all wrap `WidgetShell.vue`: surface card + tinted icon chip + title + slot; counters use `WidgetStat.vue`). Rendered dynamically by `DashboardView.vue` from the user's layout; chart widgets are async components. Add a new widget by: writing the `Widget*.vue`, adding its type string to `WidgetType` in `useDashboard.ts`, registering it in `WIDGET_REGISTRY` in `DashboardView.vue`, and adding a catalog entry in `WidgetGallery.vue`'s `SECTIONS`.
 - `src/components/layout/` — `TheAppBar` (title, back arrow, `#header-actions` teleport target, avatar), `TheTabBar` (bottom navigation, publishes `--tabbar-h`), `MoreSheet`.
 - `src/components/ui/` — shared primitives: `BottomSheet` (**the** modal — never use daisyUI `modal`/`<dialog>` or `alert`/`confirm`), `ToastHost`, `ConfirmHost`, `AppFab`, `SwipeRow`, `Stepper`, `EmptyState`, `SectionHeader`, `Skeleton`, `UserAvatar`, `BrandMark`, `OfflineBanner`.
-- `src/components/chores/` — Aufgaben: `ChoreRow` (freshness bar + XP chip), `ChoreSheet` (editor), `TeamCard`, `LevelAvatar`, `OnboardingSheet` (intro + starter templates from `src/data/choreTemplates.ts`), `RewardBurst` + `LevelUpSheet` (mounted once in `App.vue`).
+- `src/components/chores/` — Aufgaben: `ChoreRow` (freshness bar + XP chip), `ChoreSheet` (editor), `TeamCard`, `LevelAvatar`, `RoomGrid`, `QuestBoard` (goal, quests, streak, badges), `VacationSheet`, `WeeklyRecapSheet`, `OnboardingSheet` (intro + starter templates from `src/data/choreTemplates.ts`), `RewardBurst` + `LevelUpSheet` (mounted once in `App.vue`). The view switches list/rooms/quests via `?view=`.
 - `src/components/inventory/`, `shopping/`, `todos/` — feature sheets (item form/detail, location, categories, shopping item edit, stock-from-shopping; `todos/` is legacy).
 - `src/components/ChangelogModal.vue` — the "What's new" sheet driven by `useChangelog`; entries with `highlights` get a page-by-page tour first.
 

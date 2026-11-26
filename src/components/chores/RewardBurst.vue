@@ -3,6 +3,7 @@
 import { ref, watch } from 'vue';
 import { useGame, type RewardEvent } from '../../composables/useGame';
 import { FLAG_LABEL, type RewardFlag } from '../../utils/game';
+import { BADGE_MAP, QUESTS } from '../../data/gameCatalog';
 
 const { lastReward } = useGame();
 const shown = ref<RewardEvent[]>([]);
@@ -20,14 +21,20 @@ const pieces = Array.from({ length: 14 }, (_, i) => ({
 watch(lastReward, (ev) => {
   if (!ev) return;
   shown.value = [...shown.value, ev];
-  setTimeout(() => (shown.value = shown.value.filter((e) => e.id !== ev.id)), 1800);
+  const extra = (ev.quests_done?.length ?? 0) + (ev.new_badges?.length ?? 0);
+  setTimeout(() => (shown.value = shown.value.filter((e) => e.id !== ev.id)), extra ? 3200 : 1800);
 });
 </script>
 
 <template>
   <Teleport to="body">
     <div class="burst-layer fixed inset-x-0 z-50 pointer-events-none flex justify-center" aria-live="polite">
-      <div v-for="ev in shown" :key="ev.id" class="burst absolute flex flex-col items-center">
+      <div
+        v-for="ev in shown"
+        :key="ev.id"
+        class="burst absolute flex flex-col items-center"
+        :style="{ animationDuration: (ev.quests_done?.length || ev.new_badges?.length) ? '3.2s' : undefined }"
+      >
         <span
           v-for="(p, i) in pieces"
           :key="i"
@@ -44,6 +51,20 @@ watch(lastReward, (ev) => {
           {{ ev.flags.filter((f) => SHOW_FLAGS.includes(f)).map((f) => FLAG_LABEL[f]).join(' · ') }}
         </span>
         <span v-if="ev.streak > 1" class="relative z-10 mt-1 text-xs font-semibold text-warning bg-base-100/90 rounded-full px-2 py-0.5">🔥 {{ ev.streak }} Tage in Folge</span>
+        <span
+          v-for="q in ev.quests_done ?? []"
+          :key="q.key"
+          class="relative z-10 mt-1 text-xs font-semibold text-success bg-base-100/95 rounded-full px-2 py-0.5"
+        >
+          {{ QUESTS[q.key]?.emoji ?? '⭐' }} Quest „{{ QUESTS[q.key]?.title ?? q.key }}“ geschafft · +{{ q.reward }} 🪙
+        </span>
+        <span
+          v-for="b in ev.new_badges ?? []"
+          :key="b"
+          class="relative z-10 mt-1 text-xs font-semibold text-primary bg-base-100/95 rounded-full px-2 py-0.5"
+        >
+          {{ BADGE_MAP[b]?.emoji ?? '🏅' }} Neues Abzeichen: {{ BADGE_MAP[b]?.title ?? b }}
+        </span>
       </div>
     </div>
   </Teleport>

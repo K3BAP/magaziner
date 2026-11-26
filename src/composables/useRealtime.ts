@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { useShoppingList } from './useShoppingList';
 import { useShoppingLists } from './useShoppingLists';
 import { useChores } from './useChores';
+import { useGame } from './useGame';
 import { useInventory } from './useInventory';
 import { useActivity, type ActivityEntry } from './useActivity';
 
@@ -35,6 +36,7 @@ export function useRealtime() {
   const shopping = useShoppingList();
   const lists = useShoppingLists();
   const chores = useChores();
+  const game = useGame();
   const inventory = useInventory();
   const activity = useActivity();
 
@@ -75,6 +77,8 @@ export function useRealtime() {
     on('chores', (p) => chores.applyRemote(p.eventType, p.new as any, p.old as any));
     on('chore_completions', (p) => chores.applyRemoteCompletion(p.eventType, p.new as any, p.old as any));
     on('chore_areas', () => refetchAreas());
+    // Energy, weekly rollover, pauses — the daily job and other members' completions.
+    on('household_game_state', () => game.refreshSoon(), false);
     on('items', (p) => {
       // Deletes of unknown rows (other households) are ignored.
       if (p.eventType === 'DELETE' && !inventory.items.value.some((i) => i.id === (p.old as any)?.id)) return;

@@ -30,6 +30,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.4.0',
+    date: '2026-11-26',
+    title: 'Team, Quests & Abzeichen',
+    items: [
+      'Team-Energie: Erledigte Aufgaben laden sie auf, lange Überfälliges zieht jede Nacht etwas ab. Bei hoher Energie gibt es mehr Münzen, unter 30 nur noch die Hälfte. Ist sie leer, ist das Wochenziel verfehlt.',
+      'Wochenziel: Oben siehst du, wie viele XP ihr diese Woche gemeinsam gesammelt habt und wer wie viel beigetragen hat. Geschafft gibt es am Montag +20 Münzen.',
+      'Neu unter „Quests“: jede Woche drei wechselnde Team-Aufträge mit Münz-Belohnung, deine Serie und 14 Abzeichen zum Sammeln.',
+      'Deine Serie hat jetzt einen Joker: Ein verpasster Tag pro Woche reißt sie nicht ab.',
+      'Neu unter „Räume“: Jeder Raum zeigt, wie sauber er gerade ist. Ein Tipp zeigt seine Aufgaben.',
+      'Urlaub & Pause: Melde dich ab, dann übernehmen die anderen deine Aufgaben. Oder pausiert den ganzen Haushalt, ohne dass Energie oder Serien leiden.',
+      'Montags gibt es einen Wochenrückblick, und auf der Übersicht ein neues Widget „Team“.',
+    ],
+  },
+  {
     version: '2.3.0',
     date: '2026-11-26',
     title: 'Aufgaben als Spiel',

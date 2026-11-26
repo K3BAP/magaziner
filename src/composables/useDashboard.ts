@@ -10,6 +10,7 @@ export type WidgetType =
     | 'inventory-chart'
     | 'location-chart'
     | 'todos'
+    | 'team'
     | 'product'
     | 'shortcut'
     | 'shopping-list'
@@ -38,7 +39,7 @@ const DEFAULT_LAYOUT: DashboardWidget[] = [
 ];
 
 // Widgets that must always take the full row.
-const FULL_WIDTH_TYPES = new Set<WidgetType>(['quick-add', 'recent-activity']);
+const FULL_WIDTH_TYPES = new Set<WidgetType>(['quick-add', 'recent-activity', 'team']);
 
 const defaultColSpan = (type: WidgetType): 1 | 2 => {
     if (FULL_WIDTH_TYPES.has(type)) return 2;

@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import { supabase } from '../supabase';
 import { householdSnapshot } from './useActiveHousehold';
+import { toast } from './useToast';
 import { useActiveMembers } from './useHouseholdMembers';
 import { useAuth } from './useAuth';
 import { levelProgress, type RewardFlag } from '../utils/game';
@@ -22,13 +23,44 @@ export interface MemberGame {
   streak_current: number;
   streak_best: number;
   streak_last_day: string | null;
+  joker_used: boolean;
+  away_until: string | null;
+  badges: { key: string; at: string }[];
+}
+
+export interface Quest {
+  id: string;
+  key: string;
+  params: { area_id?: string };
+  target: number;
+  progress: number;
+  reward: number;
+  completed_at: string | null;
+}
+
+export interface WeekRecap {
+  week_start: string;
+  goal_xp: number | null;
+  team_xp: number;
+  goal_reached: boolean;
+  rated: boolean;
+  members: { user_id: string; xp: number; count: number }[];
+  quests: { key: string; params: { area_id?: string }; target: number; reward: number; done: boolean }[];
+  highlights: { top?: { title: string; xp: number; user_id: string } | null; rescues?: number; count?: number; energy?: number };
 }
 
 export interface GameStatus {
   household_id: string;
   today: string;
   week_start: string;
+  energy: number;
+  goal_xp: number;
+  goal_failed: boolean;
+  goal_streak: number;
+  paused_until: string | null;
   members: MemberGame[];
+  quests: Quest[];
+  recap: WeekRecap | null;
 }
 
 export interface RewardResult {
@@ -46,6 +78,10 @@ export interface RewardResult {
   next_assignee: string | null;
   by?: string | null;
   at?: string | null;
+  energy?: number;
+  coin_factor?: number;
+  new_badges?: string[];
+  quests_done?: { key: string; params: { area_id?: string }; reward: number }[];
 }
 
 export interface RewardEvent extends RewardResult {
@@ -92,7 +128,30 @@ export function useGame() {
   const announce = (res: RewardResult, title: string) => {
     const ev = { ...res, title, id: ++eventId };
     lastReward.value = ev;
-    if (res.level_after > res.level_before) levelUp.value = ev;
+    // Let the "+XP" burst play first; the sheet's backdrop would cover it.
+    if (res.level_after > res.level_before) setTimeout(() => (levelUp.value = ev), 1300);
+  };
+
+  const rpc = async (fn: string, args: Record<string, unknown>, failMsg: string) => {
+    const { error } = await supabase.rpc(fn, args);
+    if (error) {
+      toast.error(failMsg, error);
+      return false;
+    }
+    await fetchStatus();
+    return true;
+  };
+
+  /** "Ich bin weg bis …" — null ends it. */
+  const setAway = (until: string | null) => rpc('set_away', { p_until: until }, 'Urlaub konnte nicht gespeichert werden.');
+  /** Pause for the whole household — null ends it (and shifts the freshness bars). */
+  const setHouseholdPause = (until: string | null) =>
+    rpc('set_household_pause', { p_until: until }, 'Pause konnte nicht gespeichert werden.');
+
+  const markRecapSeen = async (week: string) => {
+    if (status.value?.recap?.week_start === week) status.value = { ...status.value, recap: null };
+    const { error } = await supabase.rpc('mark_recap_seen', { p_week: week });
+    if (error) console.error('Rückblick konnte nicht markiert werden', error);
   };
 
   const clearGame = () => {
@@ -120,6 +179,18 @@ export function useGame() {
     return ms.map((m) => ({ ...m, share: total ? m.xp_week / total : 0 }));
   });
   const teamWeekXp = computed(() => (status.value?.members ?? []).reduce((s, m) => s + m.xp_week, 0));
+  const goalProgress = computed(() => {
+    const goal = status.value?.goal_xp ?? 0;
+    return goal ? Math.min(1, teamWeekXp.value / goal) : 0;
+  });
+  /** Days left in the current week, today included (Mon = 7 … Sun = 1). */
+  const daysLeftInWeek = computed(() => {
+    const ws = status.value?.week_start;
+    const today = status.value?.today;
+    if (!ws || !today) return 0;
+    const diff = Math.round((Date.parse(today) - Date.parse(ws)) / 86_400_000);
+    return Math.max(1, 7 - diff);
+  });
 
   return {
     status,
@@ -130,6 +201,11 @@ export function useGame() {
     myProgress,
     weekShares,
     teamWeekXp,
+    goalProgress,
+    daysLeftInWeek,
+    setAway,
+    setHouseholdPause,
+    markRecapSeen,
     fetchStatus,
     refresh,
     refreshSoon,

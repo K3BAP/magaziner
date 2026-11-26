@@ -39,6 +39,7 @@ const SECTIONS: { heading: string; entries: CatalogEntry[] }[] = [
       { type: 'quick-add', emoji: '⚡', title: 'Schnell hinzufügen', description: 'Vorrat aufstocken ohne Umwege.' },
       { type: 'quick-expense', emoji: '💸', title: 'Neue Ausgabe', description: 'Ausgabe direkt im Schritt-Dialog erfassen.' },
       { type: 'todos', emoji: '✅', title: 'Heute dran', description: 'Fällige Aufgaben direkt abhaken.' },
+      { type: 'team', emoji: '🏆', title: 'Team', description: 'Energie, Wochenziel, Level und Serien.' },
       { type: 'shopping-list', emoji: '🛒', title: 'Einkaufsliste', description: 'Offene Einträge mit Vorschau.' },
       { type: 'finance-snapshot', emoji: '💶', title: 'Finanzen', description: 'Ausgaben des Monats.' },
     ],

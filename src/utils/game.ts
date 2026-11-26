@@ -88,6 +88,14 @@ export function freshness(c: ChoreLike): FreshnessInfo | null {
   return null;
 }
 
+/** 1 = just done, 0 = overdue ("Überfällig" starts at ratio 1.5). */
+export function choreCondition(c: ChoreLike): number | null {
+  if (c.kind !== 'recurring') return null;
+  const f = freshness(c);
+  if (!f) return null;
+  return Math.max(0, Math.min(1, 1 - f.ratio / 1.5));
+}
+
 export const FRESHNESS_TONE: Record<Freshness, string> = {
   fresh: 'bg-success',
   soon: 'bg-warning',

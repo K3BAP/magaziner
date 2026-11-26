@@ -136,6 +136,24 @@ begin
   insert into public.game_member_state (household_id, user_id, streak_current, streak_best, streak_last_day)
   values (v_hh, v_user, 3, 3, current_date - 1);
 
+  -- M2: Team-Energie 45 („Geht so“), laufende Woche mit drei Quests, ein ungesehener
+  -- Rückblick der Vorwoche (öffnet sich beim ersten Besuch von Aufgaben), ein Abzeichen.
+  insert into public.household_game_state (household_id, energy, week_start, weekly_goal_xp, goal_streak)
+  values (v_hh, 45, private.game_week_start(private.game_today()), 150, 1);
+
+  insert into public.game_quests (household_id, week_start, key, params, target, reward_coins) values
+    (v_hh, private.game_week_start(private.game_today()), 'rescue',      '{}', 2, 15),
+    (v_hh, private.game_week_start(private.game_today()), 'big_cleanup', '{}', 2, 20),
+    (v_hh, private.game_week_start(private.game_today()), 'room_shine',  '{"area_id":"00000000-0000-4000-8000-000000000a02"}', 1, 15);
+
+  insert into public.game_weeks (household_id, week_start, goal_xp, team_xp, goal_reached, rated, members, quests, highlights)
+  values (v_hh, private.game_week_start(private.game_today()) - 7, 80, 150, true, true,
+    jsonb_build_array(jsonb_build_object('user_id', v_user, 'xp', 150, 'count', 6)),
+    '[{"key":"unloved","params":{},"target":3,"reward":15,"done":true},{"key":"early_bird","params":{},"target":4,"reward":10,"done":false},{"key":"no_red","params":{},"target":1,"reward":25,"done":false}]',
+    jsonb_build_object('top', jsonb_build_object('title', 'Backofen reinigen', 'xp', 60, 'user_id', v_user), 'rescues', 1, 'count', 6, 'energy', 70));
+
+  insert into public.user_badges (household_id, user_id, badge_key) values (v_hh, v_user, 'first_chore');
+
   -- Vorräte (2.0): Orte, Kategorien, Produkte mit allen Ablauf-Zuständen.
   insert into public.locations (id, household_id, name, icon) values
     ('00000000-0000-4000-8000-000000000401', v_hh, 'Kühlschrank',    '❄️'),

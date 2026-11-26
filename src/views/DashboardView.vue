@@ -23,6 +23,7 @@ import WidgetSoonExpired from '../components/widgets/WidgetSoonExpired.vue';
 import WidgetOpened from '../components/widgets/WidgetOpened.vue';
 import WidgetLowStock from '../components/widgets/WidgetLowStock.vue';
 import WidgetTodos from '../components/widgets/WidgetTodos.vue';
+import WidgetTeam from '../components/widgets/WidgetTeam.vue';
 import WidgetProduct from '../components/widgets/WidgetProduct.vue';
 import WidgetShortcut from '../components/widgets/WidgetShortcut.vue';
 import WidgetShoppingList from '../components/widgets/WidgetShoppingList.vue';
@@ -42,6 +43,7 @@ const WIDGET_REGISTRY: Record<string, Component> = {
   'inventory-chart': defineAsyncComponent(() => import('../components/widgets/WidgetInventoryChart.vue')),
   'location-chart': defineAsyncComponent(() => import('../components/widgets/WidgetLocationChart.vue')),
   todos: WidgetTodos,
+  team: WidgetTeam,
   product: WidgetProduct,
   shortcut: WidgetShortcut,
   'shopping-list': WidgetShoppingList,
@@ -77,6 +79,8 @@ const handleWidgetClick = (widget: DashboardWidget) => {
   switch (widget.type) {
     case 'todos':
       return router.push({ name: 'todos' });
+    case 'team':
+      return router.push({ name: 'todos', query: { view: 'quests' } });
     case 'shopping-list':
       return router.push({ name: 'shoppingList' });
     case 'inventory-chart':

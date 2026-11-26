@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useChores, type Chore } from '../composables/useChores';
 import { useGame } from '../composables/useGame';
 import { useAuth } from '../composables/useAuth';
@@ -9,6 +10,10 @@ import ChoreRow from '../components/chores/ChoreRow.vue';
 import ChoreSheet from '../components/chores/ChoreSheet.vue';
 import TeamCard from '../components/chores/TeamCard.vue';
 import OnboardingSheet from '../components/chores/OnboardingSheet.vue';
+import RoomGrid from '../components/chores/RoomGrid.vue';
+import QuestBoard from '../components/chores/QuestBoard.vue';
+import VacationSheet from '../components/chores/VacationSheet.vue';
+import WeeklyRecapSheet from '../components/chores/WeeklyRecapSheet.vue';
 import UserAvatar from '../components/ui/UserAvatar.vue';
 import SectionHeader from '../components/ui/SectionHeader.vue';
 import Skeleton from '../components/ui/Skeleton.vue';
@@ -38,6 +43,28 @@ const editing = ref<Chore | null>(null);
 const sheetInitialTitle = ref('');
 const onboardingOpen = ref(false);
 const templatesOnly = ref(false);
+const vacationOpen = ref(false);
+
+// Sub-view lives in the URL (?view=rooms|quests) so links and push targets can open it.
+type View = 'list' | 'rooms' | 'quests';
+const route = useRoute();
+const router = useRouter();
+const view = computed<View>(() => {
+  const v = route.query.view;
+  return v === 'rooms' || v === 'quests' ? v : 'list';
+});
+const setView = (v: View) => router.replace({ query: { ...route.query, view: v === 'list' ? undefined : v } });
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'list', label: 'Aufgaben' },
+  { key: 'rooms', label: 'Räume' },
+  { key: 'quests', label: 'Quests' },
+];
+const questBadge = computed(() => (status.value?.quests ?? []).filter((q) => !q.completed_at).length);
+
+const pickRoom = (areaId: string) => {
+  areaFilter.value = areaId;
+  setView('list');
+};
 
 const visible = computed(() =>
   chores.value.filter((c) => {
@@ -151,7 +178,26 @@ const openTemplates = (only: boolean) => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <TeamCard v-if="status && members.length" />
+    <TeamCard v-if="status && members.length" @vacation="vacationOpen = true" />
+
+    <div v-if="chores.length" role="tablist" class="tabs tabs-box bg-base-100 w-full grid grid-cols-3">
+      <button
+        v-for="v in VIEWS"
+        :key="v.key"
+        role="tab"
+        type="button"
+        class="tab gap-1.5"
+        :class="{ 'tab-active': view === v.key }"
+        :aria-selected="view === v.key"
+        @click="setView(v.key)"
+      >
+        {{ v.label }}
+        <span v-if="v.key === 'quests' && questBadge" class="badge badge-xs badge-accent">{{ questBadge }}</span>
+      </button>
+    </div>
+
+    <RoomGrid v-if="view === 'rooms' && chores.length" @select="pickRoom" />
+    <QuestBoard v-else-if="view === 'quests' && chores.length" @vacation="vacationOpen = true" />
 
     <Skeleton v-if="!loaded && loading" :rows="5" />
 
@@ -168,7 +214,7 @@ const openTemplates = (only: boolean) => {
       </section>
     </template>
 
-    <template v-else>
+    <template v-else-if="view === 'list'">
       <div class="flex flex-col gap-2">
         <div v-if="members.length > 1" role="tablist" class="tabs tabs-box bg-base-100 w-fit">
           <button role="tab" type="button" class="tab" :class="{ 'tab-active': filter === 'all' }" @click="filter = 'all'">Alle</button>
@@ -271,13 +317,18 @@ const openTemplates = (only: boolean) => {
         </template>
       </section>
 
-      <button type="button" class="btn btn-ghost btn-sm gap-2 self-center text-base-content/60" @click="openTemplates(true)">
-        <SparklesIcon class="h-4 w-4" /> Aus Vorlagen hinzufügen
-      </button>
+      <div class="flex flex-wrap justify-center gap-1">
+        <button type="button" class="btn btn-ghost btn-sm gap-2 text-base-content/60" @click="openTemplates(true)">
+          <SparklesIcon class="h-4 w-4" /> Aus Vorlagen hinzufügen
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm gap-2 text-base-content/60" @click="vacationOpen = true">
+          <span aria-hidden="true">🏖️</span> Urlaub & Pause
+        </button>
+      </div>
     </template>
 
     <Teleport to="body">
-      <div class="addbar fixed inset-x-0 z-30 px-4 pointer-events-none">
+      <div v-if="view === 'list'" class="addbar fixed inset-x-0 z-30 px-4 pointer-events-none">
         <form
           class="mx-auto max-w-2xl pointer-events-auto flex items-center gap-2 rounded-full bg-base-100 shadow-lg shadow-base-content/10 border border-base-300 pl-4 pr-1.5 py-1.5"
           @submit.prevent="quickAdd"
@@ -308,6 +359,8 @@ const openTemplates = (only: boolean) => {
 
     <ChoreSheet :open="sheetOpen" :chore="editing" :initial-title="sheetInitialTitle" :initial-area-id="areaFilter" @close="sheetOpen = false" />
     <OnboardingSheet :open="onboardingOpen" :templates-only="templatesOnly" @close="onboardingOpen = false" />
+    <VacationSheet :open="vacationOpen" @close="vacationOpen = false" />
+    <WeeklyRecapSheet />
   </div>
 </template>
 

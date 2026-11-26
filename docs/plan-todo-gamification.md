@@ -1,6 +1,6 @@
 # Aufgaben 3.0 – Gamification-Plan
 
-Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben, M1 umgesetzt (2.3.0, noch nicht committet)**
+Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1 (2.3.0) ausgeliefert · M2 (2.4.0) umgesetzt, noch nicht committet**
 
 Ziel: Aus der einfachen To-do-Liste wird ein Haushalts-Spiel, das zum Mitmachen motiviert:
 XP und Level pro Person, ein gemeinsames Wochenziel, Quests, Abzeichen, eine Team-Energie,
@@ -422,6 +422,13 @@ Fair-Modus mit zwei Personen sind nur per Code-Review geprüft, weil der Test-Ha
 - `household_game_state`, `game_quests`, `game_weeks`, `user_badges`. `pg_cron` mit `game_daily` und `game_weekly`.
 - Energie, Wochenziel + Fairness-Balken, Wochen-Quests, Streak-Joker, Abzeichen, Raum-Übersicht mit Zustand,
   Quests-Ansicht, Wochenrückblick, Urlaubsmodus (Person + Haushalt), `WidgetTeam`.
+
+*Stand M2:* umgesetzt mit diesen Abweichungen: Urlaub und Pause liegen nicht in Person-/Haushalts-Spalten,
+sondern in einer Tabelle `game_pauses` (mit Historie, damit Streaks rückwirkend stimmen). Der Wochenwechsel
+läuft lazy beim ersten Aufruf der neuen Woche und zusätzlich täglich per Cron, es gibt also keinen eigenen
+Montags-Job. Der Streak-Joker wird nicht gespeichert, sondern aus Erledigungen und Pausen berechnet.
+Urlaub und Pause erreicht man über „Urlaub & Pause“ in der Aufgaben-Ansicht statt über die Einstellungen.
+Undo nimmt XP, Münzen und Energie zurück, aber keine Quests oder Abzeichen. Das Quest „kudos“ wird erst mit M3 gezogen.
 
 **M3 – Shop & Kudos (2.5.0)**
 - `rewards`, `reward_redemptions`, `chore_kudos` + RPCs. Shop-Ansicht mit Gutscheinen, Vorschlagsliste, Kudos an
