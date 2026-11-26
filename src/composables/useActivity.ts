@@ -8,7 +8,16 @@ import { householdSnapshot } from './useActiveHousehold';
  * every member sees who did what, on every device.
  */
 
-export type ActivityKind = 'added' | 'opened' | 'consumed' | 'removed' | 'bought' | 'todo_done';
+export type ActivityKind =
+  | 'added'
+  | 'opened'
+  | 'consumed'
+  | 'removed'
+  | 'bought'
+  | 'todo_done'
+  | 'kudos'
+  | 'reward_redeemed'
+  | 'reward_fulfilled';
 
 export interface ActivityEntry {
   id: string;
@@ -67,4 +76,12 @@ export const ACTIVITY_VERB: Record<ActivityKind, string> = {
   removed: 'aufgebraucht',
   bought: 'eingekauft',
   todo_done: 'erledigt',
+  kudos: 'Kudos gegeben',
+  reward_redeemed: 'eingelöst',
+  reward_fulfilled: 'erfüllt',
+};
+
+/** Word before the subject („Anna hat <für> Bad putzen Kudos gegeben“). */
+export const ACTIVITY_PREFIX: Partial<Record<ActivityKind, string>> = {
+  kudos: 'für',
 };

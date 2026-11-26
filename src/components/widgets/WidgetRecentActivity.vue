@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useActivity, ACTIVITY_VERB, type ActivityKind } from '../../composables/useActivity';
+import { useActivity, ACTIVITY_VERB, ACTIVITY_PREFIX, type ActivityKind } from '../../composables/useActivity';
 import { useActiveMembers } from '../../composables/useHouseholdMembers';
 import { useAuth } from '../../composables/useAuth';
 import WidgetShell from './WidgetShell.vue';
@@ -39,6 +39,9 @@ const EMOJI: Record<ActivityKind, string> = {
   removed: '🗑️',
   bought: '🛒',
   todo_done: '✅',
+  kudos: '👏',
+  reward_redeemed: '🎁',
+  reward_fulfilled: '🎉',
 };
 
 const actorName = (id: string | null) => {
@@ -72,7 +75,7 @@ const relativeTime = (iso: string) => {
         </span>
         <div class="flex-1 min-w-0 text-sm leading-snug">
           <span class="font-semibold">{{ actorName(e.actor_id) }}</span>
-          hat <span class="font-medium">{{ e.subject }}</span> {{ ACTIVITY_VERB[e.kind] }}<span v-if="e.times > 1" class="text-base-content/50"> ({{ e.times }}×)</span>
+          {{ e.actor_id && e.actor_id === user?.id ? 'hast' : 'hat' }} <template v-if="ACTIVITY_PREFIX[e.kind]">{{ ACTIVITY_PREFIX[e.kind] }} </template><span class="font-medium">{{ e.subject }}</span> {{ ACTIVITY_VERB[e.kind] }}<span v-if="e.times > 1" class="text-base-content/50"> ({{ e.times }}×)</span>
         </div>
         <span class="text-xs text-base-content/45 tabular-nums shrink-0">{{ relativeTime(e.created_at) }}</span>
       </li>

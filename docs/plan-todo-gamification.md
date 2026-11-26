@@ -1,6 +1,6 @@
 # Aufgaben 3.0 – Gamification-Plan
 
-Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1 (2.3.0) ausgeliefert · M2 (2.4.0) umgesetzt, noch nicht committet**
+Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1 (2.3.0), M2 (2.4.0) und M3 (2.5.0) ausgeliefert**
 
 Ziel: Aus der einfachen To-do-Liste wird ein Haushalts-Spiel, das zum Mitmachen motiviert:
 XP und Level pro Person, ein gemeinsames Wochenziel, Quests, Abzeichen, eine Team-Energie,
@@ -433,6 +433,14 @@ Undo nimmt XP, Münzen und Energie zurück, aber keine Quests oder Abzeichen. Da
 **M3 – Shop & Kudos (2.5.0)**
 - `rewards`, `reward_redemptions`, `chore_kudos` + RPCs. Shop-Ansicht mit Gutscheinen, Vorschlagsliste, Kudos an
   Erledigungen und in der Aktivität, Profil-Sheet mit Statistik.
+
+*Stand M3:* umgesetzt mit diesen Abweichungen: Rewards und Gutscheine lädt `useRewards.ts` direkt über RLS statt
+über `game_status()`. Statistik fürs Profil kommt aus `member_stats` (SECURITY INVOKER). Kudos-Münzen hängen mit
+`ref_id` an der Erledigung, damit „Rückgängig“ sie mitnimmt. Kudos gibt es im Verlauf der Aufgaben-Liste (nicht in
+der Zeile der Aufgabe), in der Aktivität steht „X hat für … Kudos gegeben“. Stornieren und „Rückgängig“ im Toast sind
+dasselbe; der Aktivitäts-Eintrag des Einlösens verschwindet dabei. Wer allein im Haushalt ist, hakt eigene Gutscheine
+selbst ab. Der Push beim Einlösen kommt mit M4. Neu: Quest `kudos` (nur ab 2 Personen) und Abzeichen `generous`.
+Kudos sind nur per SQL-Schutzprüfung und Code-Review getestet, weil der Test-Haushalt ein Mitglied hat.
 
 **M4 – Push für Aufgaben (2.6.0)**
 - Outbox verallgemeinern, Topics an Subscriptions, Schalter in den Einstellungen, `game_digest`-Cron,

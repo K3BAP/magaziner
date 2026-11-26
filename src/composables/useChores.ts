@@ -4,6 +4,7 @@ import { useActiveHousehold, householdSnapshot } from './useActiveHousehold';
 import { useAuth } from './useAuth';
 import { toast } from './useToast';
 import { useGame, type RewardResult } from './useGame';
+import type { KudosEmoji } from '../data/gameCatalog';
 import { addDaysISO, todayLocalISO } from '../utils/date';
 import { freshness, type AssignMode, type ChoreKind, type Effort, type RewardFlag } from '../utils/game';
 
@@ -54,6 +55,8 @@ export interface ChoreCompletion {
   xp: number;
   coins: number;
   flags: RewardFlag[];
+  /** Kudos other members gave this completion. */
+  kudos: { user_id: string; emoji: string }[];
 }
 
 export type ChoreInput = Pick<
@@ -72,6 +75,11 @@ const completing = ref<Set<string>>(new Set());
 const RECENT_DAYS = 14;
 
 const normalize = (row: any): Chore => ({ ...row, rotation: row.rotation ?? [], unpopular: !!row.unpopular });
+const normalizeCompletion = ({ chore_kudos, ...row }: any): ChoreCompletion => ({
+  ...row,
+  flags: row.flags ?? [],
+  kudos: (chore_kudos ?? row.kudos ?? []) as ChoreCompletion['kudos'],
+});
 
 export function useChores() {
   const { activeHouseholdId } = useActiveHousehold();
@@ -88,7 +96,7 @@ export function useChores() {
         supabase.from('chore_areas').select('*').order('sort').order('created_at'),
         supabase
           .from('chore_completions')
-          .select('id, chore_id, chore_title, area_id, user_id, done_at, xp, coins, flags')
+          .select('id, chore_id, chore_title, area_id, user_id, done_at, xp, coins, flags, chore_kudos(user_id, emoji)')
           .gte('done_at', since)
           .order('done_at', { ascending: false })
           .limit(60),
@@ -99,7 +107,7 @@ export function useChores() {
       if (r.error) throw r.error;
       chores.value = (c.data ?? []).map(normalize);
       areas.value = (a.data ?? []) as ChoreArea[];
-      recent.value = (r.data ?? []) as ChoreCompletion[];
+      recent.value = (r.data ?? []).map(normalizeCompletion);
       loaded.value = true;
     } catch (e) {
       toast.error('Aufgaben konnten nicht geladen werden.', e);
@@ -317,9 +325,43 @@ export function useChores() {
       if (!recent.value.some((r) => r.id === old?.id)) return;
       recent.value = recent.value.filter((r) => r.id !== old?.id);
     } else if (!recent.value.some((r) => r.id === row.id)) {
-      recent.value = [row as ChoreCompletion, ...recent.value].slice(0, 60);
+      recent.value = [normalizeCompletion(row), ...recent.value].slice(0, 60);
     }
     game.refreshSoon();
+  };
+
+  const addKudosLocal = (completionId: string, k: { user_id: string; emoji: string }) => {
+    const c = recent.value.find((r) => r.id === completionId);
+    if (!c || c.kudos.some((x) => x.user_id === k.user_id)) return false;
+    c.kudos = [...c.kudos, k];
+    return true;
+  };
+
+  const applyRemoteKudos = (event: 'INSERT' | 'UPDATE' | 'DELETE', row: any) => {
+    // Kudos are never removed on their own; a deleted completion takes them along.
+    if (event === 'DELETE' || !row) return;
+    addKudosLocal(row.completion_id, { user_id: row.user_id, emoji: row.emoji });
+    game.refreshSoon();
+  };
+
+  /** One kudos per completion and giver; the doer gets +1 coin. */
+  const giveKudos = async (completion: ChoreCompletion, emoji: KudosEmoji) => {
+    const me = user.value?.id;
+    if (!me || completion.user_id === me) return false;
+    if (!addKudosLocal(completion.id, { user_id: me, emoji })) return false;
+    const { data, error } = await supabase.rpc('give_kudos', { p_completion_id: completion.id, p_emoji: emoji });
+    if (error) {
+      const c = recent.value.find((r) => r.id === completion.id);
+      if (c) c.kudos = c.kudos.filter((k) => k.user_id !== me);
+      toast.error('Kudos konnten nicht gesendet werden.', error);
+      return false;
+    }
+    const res = data as { status: string; new_badges?: string[]; quests_done?: unknown[] };
+    if (res.status === 'ok') {
+      toast.success(`${emoji} an ${game.displayName(completion.user_id)} geschickt · +1 🪙`);
+      game.refresh();
+    }
+    return true;
   };
 
   const clearChores = () => {
@@ -364,6 +406,8 @@ export function useChores() {
     areaById,
     applyRemote,
     applyRemoteCompletion,
+    applyRemoteKudos,
+    giveKudos,
     clearChores,
   };
 }

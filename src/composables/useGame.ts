@@ -63,6 +63,15 @@ export interface GameStatus {
   recap: WeekRecap | null;
 }
 
+export interface MemberStats {
+  weeks: { week_start: string; count: number; xp: number }[];
+  total: number;
+  rescues: number;
+  fav_area: { area_id: string; count: number } | null;
+  kudos_received: number;
+  kudos_given: number;
+}
+
 export interface RewardResult {
   status: 'ok' | 'already_done';
   completion_id?: string;
@@ -148,6 +157,16 @@ export function useGame() {
   const setHouseholdPause = (until: string | null) =>
     rpc('set_household_pause', { p_until: until }, 'Pause konnte nicht gespeichert werden.');
 
+  /** Profile statistics (last 8 weeks, favourite room, kudos). */
+  const fetchMemberStats = async (userId: string): Promise<MemberStats | null> => {
+    const { data, error } = await supabase.rpc('member_stats', { p_user_id: userId });
+    if (error) {
+      console.error('Statistik konnte nicht geladen werden', error);
+      return null;
+    }
+    return data as MemberStats;
+  };
+
   const markRecapSeen = async (week: string) => {
     if (status.value?.recap?.week_start === week) status.value = { ...status.value, recap: null };
     const { error } = await supabase.rpc('mark_recap_seen', { p_week: week });
@@ -206,6 +225,7 @@ export function useGame() {
     setAway,
     setHouseholdPause,
     markRecapSeen,
+    fetchMemberStats,
     fetchStatus,
     refresh,
     refreshSoon,

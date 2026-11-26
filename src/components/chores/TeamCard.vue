@@ -13,7 +13,7 @@ import { levelProgress, levelTitle } from '../../utils/game';
 import { energyMood } from '../../data/gameCatalog';
 import { parseLocalDate } from '../../utils/date';
 
-const emit = defineEmits<{ (e: 'vacation'): void }>();
+const emit = defineEmits<{ (e: 'vacation'): void; (e: 'profile', userId: string): void }>();
 
 const { status, teamWeekXp, me, daysLeftInWeek } = useGame();
 const { members } = useActiveMembers();
@@ -65,7 +65,15 @@ const shortDate = (iso: string) => parseLocalDate(iso).toLocaleDateString('de-DE
     </button>
 
     <div class="flex items-start gap-4 overflow-x-auto -mx-1 px-1">
-      <div v-for="r in rows" :key="r.user_id" class="flex items-center gap-3 min-w-0" :class="multi ? 'flex-1' : ''">
+      <button
+        v-for="r in rows"
+        :key="r.user_id"
+        type="button"
+        class="flex items-center gap-3 min-w-0 text-left rounded-2xl pressable"
+        :class="multi ? 'flex-1' : ''"
+        :aria-label="`Profil von ${r.isMe ? 'dir' : r.display_name}`"
+        @click="emit('profile', r.user_id)"
+      >
         <LevelAvatar :name="r.display_name" :src="r.avatar_url" :xp="r.xp" />
         <div class="min-w-0">
           <p class="font-semibold leading-tight truncate">{{ r.isMe ? 'Du' : r.display_name }}</p>
@@ -78,7 +86,7 @@ const shortDate = (iso: string) => parseLocalDate(iso).toLocaleDateString('de-DE
             <span v-if="r.streak > 0" class="font-semibold text-warning" :title="`${r.streak} Tage in Folge`">🔥{{ r.streak }}</span>
           </p>
         </div>
-      </div>
+      </button>
       <div v-if="me" class="ml-auto shrink-0 self-center rounded-full bg-warning/15 px-3 py-1 text-sm font-bold tabular-nums" title="Deine Münzen">
         🪙 {{ me.coins }}
       </div>

@@ -154,6 +154,29 @@ begin
 
   insert into public.user_badges (household_id, user_id, badge_key) values (v_hh, v_user, 'first_chore');
 
+  -- M3: Shop. Bonus-Münzen der Vorwoche (→ 54 🪙 nach dem offenen Gutschein), vier Belohnungen
+  -- (zwei bezahlbar, zwei mit „noch … 🪙“), ein offener Gutschein (< 24 h, stornierbar) und ein
+  -- stornierter im Verlauf. Kudos lassen sich mit einem Mitglied nicht seeden.
+  insert into public.game_ledger (household_id, user_id, coins, reason, created_at) values
+    (v_hh, v_user, 20, 'weekly_goal', v_now - interval '3 days'),
+    (v_hh, v_user, 15, 'quest',       v_now - interval '5 days'),
+    (v_hh, v_user, 10, 'quest',       v_now - interval '6 days');
+
+  insert into public.rewards (id, household_id, emoji, title, cost, created_by) values
+    ('00000000-0000-4000-8000-000000000e01', v_hh, '🎬', 'Film aussuchen',      30,  v_user),
+    ('00000000-0000-4000-8000-000000000e02', v_hh, '🥐', 'Frühstück ans Bett',  80,  v_user),
+    ('00000000-0000-4000-8000-000000000e03', v_hh, '💆', 'Massage (10 min)',    200, v_user),
+    ('00000000-0000-4000-8000-000000000e04', v_hh, '☕', 'Kaffee ans Bett',     10,  v_user);
+
+  insert into public.reward_redemptions (id, household_id, reward_id, title, emoji, cost, redeemed_by, redeemed_at, cancelled_at) values
+    ('00000000-0000-4000-8000-000000000e11', v_hh, '00000000-0000-4000-8000-000000000e04', 'Kaffee ans Bett', '☕', 10, v_user, v_now - interval '2 hours', null),
+    ('00000000-0000-4000-8000-000000000e12', v_hh, '00000000-0000-4000-8000-000000000e01', 'Film aussuchen',  '🎬', 30, v_user, v_now - interval '4 days', v_now - interval '4 days' + interval '1 hour');
+
+  insert into public.game_ledger (household_id, user_id, coins, reason, ref_id, created_at) values
+    (v_hh, v_user, -10, 'redeem', '00000000-0000-4000-8000-000000000e11', v_now - interval '2 hours'),
+    (v_hh, v_user, -30, 'redeem', '00000000-0000-4000-8000-000000000e12', v_now - interval '4 days'),
+    (v_hh, v_user,  30, 'refund', '00000000-0000-4000-8000-000000000e12', v_now - interval '4 days' + interval '1 hour');
+
   -- Vorräte (2.0): Orte, Kategorien, Produkte mit allen Ablauf-Zuständen.
   insert into public.locations (id, household_id, name, icon) values
     ('00000000-0000-4000-8000-000000000401', v_hh, 'Kühlschrank',    '❄️'),

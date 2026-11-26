@@ -27,7 +27,8 @@ The pieces:
 
 - `scripts/seed-test-data.sql` — idempotent fixture (test household, two shopping lists with
   checked and unchecked entries, aisles, chores in every freshness state and assignment mode with
-  three days of completions (95 XP, streak 3 — the next completion is a level-up), two locations with products
+  three days of completions (95 XP, streak 3 — the next completion is a level-up), a shop with four
+  rewards, an open voucher and a cancelled one (54 coins), two locations with products
   in every expiry state, finance people/categories/transactions, a recipe whose description
   deliberately contains `<img onerror>` to check sanitising). Run it via the Supabase MCP `execute_sql`; it runs
   privileged and bypasses RLS, so no service-role key is needed. It resolves the test user by
@@ -62,11 +63,12 @@ When the active household changes, `App.vue` clears every domain store and re-fe
 
 `useRealtime.ts` opens one Supabase Realtime channel per active household (tables in the
 `supabase_realtime` publication: `shopping_list`, `shopping_lists`, `chores`, `chore_completions`,
-`chore_areas`, `household_game_state`, `items`, `item_instances`, `activity_log`; `todos` is legacy). Shopping and chore changes are applied row by row
+`chore_areas`, `chore_kudos`, `household_game_state`, `rewards`, `reward_redemptions`, `items`, `item_instances`,
+`activity_log`; `todos` is legacy). Shopping and chore changes are applied row by row
 (`applyRemote` in the composables, idempotent because our own writes echo back); inventory changes
 trigger a debounced silent re-fetch. DELETE events are unfiltered and only carry the id — ignore
-unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and the
-`complete_chore` RPC, and read by the dashboard's activity widget.
+unknown ids. `activity_log` is written exclusively by DB triggers (`private.trg_*`) and the game RPCs
+(`complete_chore`, `give_kudos`, `redeem_reward`, `fulfill_redemption`), and read by the dashboard's activity widget.
 
 ### Aufgaben (chores) and the game
 
@@ -94,6 +96,15 @@ allow one missed day per ISO week (joker); days in `game_pauses` (member away or
 rollover in SQL, shift the test household's completions, ledger, quests and `week_start` back
 7 days inside `begin; … rollback;` and call `game_status()` as the test user
 (`set_config('request.jwt.claims', …, true)`).
+
+Shop & Kudos (M3): `rewards` are plain RLS rows (anyone in the household edits them, "Löschen"
+archives). `redeem_reward` checks the balance under a per-member advisory lock, books `-cost`
+(`redeem`) and creates a `reward_redemptions` voucher; `fulfill_redemption` is for the *other*
+members (alone in the household: yourself); `cancel_redemption` refunds within 24 h. Vouchers and
+`chore_kudos` are select-only for clients. `give_kudos(completion, emoji)` — one per giver and
+completion, never your own — books +1 coin for the doer with `ref_id` = the completion, so undoing
+the completion removes it too. `member_stats(user)` (SECURITY INVOKER) feeds the profile sheet.
+Kudos can't be exercised end-to-end in the one-member test household.
 
 ### Push notifications
 
@@ -141,7 +152,8 @@ No Pinia or Vuex. All shared state lives in module-level `ref()`s inside composa
 | `useShoppingList.ts` | Entries of the active list: add/edit/delete with undo, autocomplete history, realtime apply |
 | `useShoppingLists.ts` / `useShoppingCategories.ts` | Multiple lists per household / aisles |
 | `useChores.ts` | Chores, rooms (`chore_areas`), recent completions; complete/undo via RPC, realtime apply |
-| `useGame.ts` | `game_status()`: per member XP/level/coins/streak/badges/away, team energy, weekly goal, quests, recap; vacation RPCs; reward events for the „+XP“ burst and level-up sheet |
+| `useGame.ts` | `game_status()`: per member XP/level/coins/streak/badges/away, team energy, weekly goal, quests, recap; vacation RPCs; `member_stats`; reward events for the „+XP“ burst and level-up sheet |
+| `useRewards.ts` | Shop: rewards CRUD, vouchers (redeem / fulfil / cancel via RPC), realtime apply |
 | `useTodos.ts` | Legacy to-do list, no longer used (removed in M5 of the gamification plan) |
 | `useActivity.ts` | Household activity feed (`activity_log`) |
 | `usePush.ts` | Web-Push opt-in for this device (see Push notifications) |
@@ -172,7 +184,8 @@ fallback route for the header's back arrow. Routes are lazy-loaded except the da
 - `src/components/widgets/` — dashboard widget types (all wrap `WidgetShell.vue`: surface card + tinted icon chip + title + slot; counters use `WidgetStat.vue`). Rendered dynamically by `DashboardView.vue` from the user's layout; chart widgets are async components. Add a new widget by: writing the `Widget*.vue`, adding its type string to `WidgetType` in `useDashboard.ts`, registering it in `WIDGET_REGISTRY` in `DashboardView.vue`, and adding a catalog entry in `WidgetGallery.vue`'s `SECTIONS`.
 - `src/components/layout/` — `TheAppBar` (title, back arrow, `#header-actions` teleport target, avatar), `TheTabBar` (bottom navigation, publishes `--tabbar-h`), `MoreSheet`.
 - `src/components/ui/` — shared primitives: `BottomSheet` (**the** modal — never use daisyUI `modal`/`<dialog>` or `alert`/`confirm`), `ToastHost`, `ConfirmHost`, `AppFab`, `SwipeRow`, `Stepper`, `EmptyState`, `SectionHeader`, `Skeleton`, `UserAvatar`, `BrandMark`, `OfflineBanner`.
-- `src/components/chores/` — Aufgaben: `ChoreRow` (freshness bar + XP chip), `ChoreSheet` (editor), `TeamCard`, `LevelAvatar`, `RoomGrid`, `QuestBoard` (goal, quests, streak, badges), `VacationSheet`, `WeeklyRecapSheet`, `OnboardingSheet` (intro + starter templates from `src/data/choreTemplates.ts`), `RewardBurst` + `LevelUpSheet` (mounted once in `App.vue`). The view switches list/rooms/quests via `?view=`.
+- `src/components/chores/` — Aufgaben: `ChoreRow` (freshness bar + XP chip), `ChoreSheet` (editor), `TeamCard`, `LevelAvatar`, `RoomGrid`, `QuestBoard` (goal, quests, streak, badges), `VacationSheet`, `WeeklyRecapSheet`, `OnboardingSheet` (intro + starter templates from `src/data/choreTemplates.ts`), `RewardBurst` + `LevelUpSheet` (mounted once in `App.vue`), `RewardShop` + `RewardSheet`, `ProfileSheet`
+  (tap an avatar in the team card). The view switches list/rooms/quests/shop via `?view=`; kudos live in the list's Verlauf.
 - `src/components/inventory/`, `shopping/`, `todos/` — feature sheets (item form/detail, location, categories, shopping item edit, stock-from-shopping; `todos/` is legacy).
 - `src/components/ChangelogModal.vue` — the "What's new" sheet driven by `useChangelog`; entries with `highlights` get a page-by-page tour first.
 

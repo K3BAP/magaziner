@@ -30,6 +30,18 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.5.0',
+    date: '2026-11-26',
+    title: 'Belohnungs-Shop & Kudos',
+    items: [
+      'Neu unter Aufgaben → „Shop“: Legt eigene Belohnungen an (oder übernehmt einen Vorschlag) und löst sie mit euren Münzen ein.',
+      'Eingelöste Belohnungen werden zu Gutscheinen. Die anderen haken sie mit „Erfüllt“ ab, und du kannst sie 24 Stunden lang stornieren und bekommst die Münzen zurück.',
+      'Kudos: Im Verlauf kannst du die Erledigungen der anderen mit 👏 💪 ✨ oder ❤️ feiern. Wer Kudos bekommt, erhält eine Münze.',
+      'Tipp auf einen Avatar in der Team-Karte öffnet das Profil mit Level, Serie, Abzeichen und den Erledigungen der letzten 8 Wochen.',
+      'Neues Quest „Danke sagen“ und ein neues Abzeichen für 50 verteilte Kudos.',
+    ],
+  },
+  {
     version: '2.4.0',
     date: '2026-11-26',
     title: 'Team, Quests & Abzeichen',

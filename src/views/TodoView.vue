@@ -14,6 +14,11 @@ import RoomGrid from '../components/chores/RoomGrid.vue';
 import QuestBoard from '../components/chores/QuestBoard.vue';
 import VacationSheet from '../components/chores/VacationSheet.vue';
 import WeeklyRecapSheet from '../components/chores/WeeklyRecapSheet.vue';
+import RewardShop from '../components/chores/RewardShop.vue';
+import ProfileSheet from '../components/chores/ProfileSheet.vue';
+import { useRewards } from '../composables/useRewards';
+import { KUDOS_EMOJIS, type KudosEmoji } from '../data/gameCatalog';
+import type { ChoreCompletion } from '../composables/useChores';
 import UserAvatar from '../components/ui/UserAvatar.vue';
 import SectionHeader from '../components/ui/SectionHeader.vue';
 import Skeleton from '../components/ui/Skeleton.vue';
@@ -27,7 +32,8 @@ import {
   ArrowUturnLeftIcon,
 } from '@heroicons/vue/24/outline';
 
-const { chores, areas, recent, loading, loaded, addChore, undo, archiveCompletedOnce, areaById } = useChores();
+const { chores, areas, recent, loading, loaded, addChore, undo, archiveCompletedOnce, areaById, giveKudos } = useChores();
+const { toFulfil } = useRewards();
 const { status } = useGame();
 const { user } = useAuth();
 const { members, memberById, ensureLoaded } = useActiveMembers();
@@ -44,20 +50,41 @@ const sheetInitialTitle = ref('');
 const onboardingOpen = ref(false);
 const templatesOnly = ref(false);
 const vacationOpen = ref(false);
+const profileId = ref<string | null>(null);
+const profileOpen = ref(false);
+const openProfile = (id: string) => {
+  profileId.value = id;
+  profileOpen.value = true;
+};
+const vacationFromProfile = () => {
+  profileOpen.value = false;
+  vacationOpen.value = true;
+};
 
-// Sub-view lives in the URL (?view=rooms|quests) so links and push targets can open it.
-type View = 'list' | 'rooms' | 'quests';
+// Kudos in the history: an inline picker per completion.
+const kudosPicker = ref<string | null>(null);
+const myKudos = (r: ChoreCompletion) => r.kudos.find((k) => k.user_id === user.value?.id);
+const canKudos = (r: ChoreCompletion) => !!r.user_id && r.user_id !== user.value?.id && !myKudos(r);
+const sendKudos = async (r: ChoreCompletion, emoji: KudosEmoji) => {
+  kudosPicker.value = null;
+  await giveKudos(r, emoji);
+};
+const kudosTitle = (r: ChoreCompletion) => r.kudos.map((k) => `${nameOf(k.user_id)} ${k.emoji}`).join(', ');
+
+// Sub-view lives in the URL (?view=rooms|quests|shop) so links and push targets can open it.
+type View = 'list' | 'rooms' | 'quests' | 'shop';
 const route = useRoute();
 const router = useRouter();
 const view = computed<View>(() => {
   const v = route.query.view;
-  return v === 'rooms' || v === 'quests' ? v : 'list';
+  return v === 'rooms' || v === 'quests' || v === 'shop' ? v : 'list';
 });
 const setView = (v: View) => router.replace({ query: { ...route.query, view: v === 'list' ? undefined : v } });
 const VIEWS: { key: View; label: string }[] = [
   { key: 'list', label: 'Aufgaben' },
   { key: 'rooms', label: 'Räume' },
   { key: 'quests', label: 'Quests' },
+  { key: 'shop', label: 'Shop' },
 ];
 const questBadge = computed(() => (status.value?.quests ?? []).filter((q) => !q.completed_at).length);
 
@@ -178,9 +205,9 @@ const openTemplates = (only: boolean) => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <TeamCard v-if="status && members.length" @vacation="vacationOpen = true" />
+    <TeamCard v-if="status && members.length" @vacation="vacationOpen = true" @profile="openProfile" />
 
-    <div v-if="chores.length" role="tablist" class="tabs tabs-box bg-base-100 w-full grid grid-cols-3">
+    <div v-if="chores.length" role="tablist" class="tabs tabs-box bg-base-100 w-full grid grid-cols-4">
       <button
         v-for="v in VIEWS"
         :key="v.key"
@@ -193,11 +220,13 @@ const openTemplates = (only: boolean) => {
       >
         {{ v.label }}
         <span v-if="v.key === 'quests' && questBadge" class="badge badge-xs badge-accent">{{ questBadge }}</span>
+        <span v-if="v.key === 'shop' && toFulfil.length" class="badge badge-xs badge-accent">{{ toFulfil.length }}</span>
       </button>
     </div>
 
     <RoomGrid v-if="view === 'rooms' && chores.length" @select="pickRoom" />
     <QuestBoard v-else-if="view === 'quests' && chores.length" @vacation="vacationOpen = true" />
+    <RewardShop v-else-if="view === 'shop' && chores.length" />
 
     <Skeleton v-if="!loaded && loading" :rows="5" />
 
@@ -282,7 +311,7 @@ const openTemplates = (only: boolean) => {
         </SectionHeader>
         <template v-if="showHistory">
           <ul v-if="history.length" class="surface divide-y divide-base-200 overflow-hidden mb-3">
-            <li v-for="r in history" :key="r.id" class="flex items-center gap-3 px-3 py-2.5">
+            <li v-for="r in history" :key="r.id" class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
               <UserAvatar :name="memberById(r.user_id)?.display_name ?? nameOf(r.user_id)" :src="memberById(r.user_id)?.avatar_url" size="sm" />
               <div class="flex-1 min-w-0 text-sm leading-snug">
                 <p class="truncate">
@@ -291,8 +320,21 @@ const openTemplates = (only: boolean) => {
                 </p>
                 <p class="text-xs text-base-content/50">
                   {{ relativeTime(r.done_at) }}<span v-if="r.flags.includes('rescue')"> · 🦸 Rettung</span><span v-else-if="r.flags.includes('on_time')"> · ⏱ pünktlich</span>
+                  <span v-if="r.kudos.length" class="ml-1 tracking-tight" :title="kudosTitle(r)" :aria-label="`Kudos: ${kudosTitle(r)}`">{{ r.kudos.map((k) => k.emoji).join('') }}</span>
                 </p>
               </div>
+              <button
+                v-if="canKudos(r)"
+                type="button"
+                class="btn btn-ghost btn-circle btn-sm text-base"
+                :class="kudosPicker === r.id ? 'bg-base-200' : 'grayscale opacity-70'"
+                :aria-expanded="kudosPicker === r.id"
+                :aria-label="`Kudos an ${nameOf(r.user_id)}`"
+                title="Kudos geben (+1 🪙)"
+                @click="kudosPicker = kudosPicker === r.id ? null : r.id"
+              >
+                👏
+              </button>
               <span class="text-xs font-bold text-primary tabular-nums">+{{ r.xp }}</span>
               <button
                 v-if="canUndo(r)"
@@ -304,6 +346,19 @@ const openTemplates = (only: boolean) => {
               >
                 <ArrowUturnLeftIcon class="h-4 w-4" />
               </button>
+              <div v-if="kudosPicker === r.id" class="basis-full flex items-center justify-end gap-1.5">
+                <span class="text-xs text-base-content/55 mr-1">Kudos an {{ nameOf(r.user_id) }}:</span>
+                <button
+                  v-for="em in KUDOS_EMOJIS"
+                  :key="em"
+                  type="button"
+                  class="h-9 w-9 rounded-xl bg-base-200 text-lg pressable"
+                  :aria-label="`${em} schicken`"
+                  @click="sendKudos(r, em)"
+                >
+                  {{ em }}
+                </button>
+              </div>
             </li>
           </ul>
           <button
@@ -361,6 +416,7 @@ const openTemplates = (only: boolean) => {
     <OnboardingSheet :open="onboardingOpen" :templates-only="templatesOnly" @close="onboardingOpen = false" />
     <VacationSheet :open="vacationOpen" @close="vacationOpen = false" />
     <WeeklyRecapSheet />
+    <ProfileSheet :open="profileOpen" :user-id="profileId" @close="profileOpen = false" @vacation="vacationFromProfile" />
   </div>
 </template>
 

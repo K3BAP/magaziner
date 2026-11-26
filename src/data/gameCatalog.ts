@@ -50,6 +50,7 @@ export const BADGES: [string, BadgeText][] = [
   ['teamplayer', { emoji: '🤝', title: 'Teamplayer', how: '4 Wochenziele in Folge geschafft.' }],
   ['quest_master', { emoji: '🗺️', title: 'Questmeister', how: 'Der Haushalt hat 25 Quests geschafft.' }],
   ['allrounder', { emoji: '🧭', title: 'Allrounder', how: 'In mindestens 3 Räumen je 10 Aufgaben.' }],
+  ['generous', { emoji: '🎉', title: 'Großzügig', how: '50 Kudos verteilt.' }],
 ];
 
 export const BADGE_MAP: Record<string, BadgeText> = Object.fromEntries(BADGES);
@@ -69,3 +70,27 @@ export function energyMood(energy: number): EnergyMood {
   if (energy > 0) return { emoji: '😩', label: 'Erschöpft', hint: 'Münzen × 0,5', tone: 'bg-error' };
   return { emoji: '😵', label: 'Am Ende', hint: 'Wochenziel diese Woche verfehlt', tone: 'bg-error' };
 }
+
+/** Kudos reactions (must match the check in `chore_kudos`). */
+export const KUDOS_EMOJIS = ['👏', '💪', '✨', '❤️'] as const;
+export type KudosEmoji = (typeof KUDOS_EMOJIS)[number];
+
+/** Price tiers for new rewards (at roughly 50–70 coins per person and week). */
+export const REWARD_PRICES = [
+  { label: 'Klein', cost: 30 },
+  { label: 'Mittel', cost: 80 },
+  { label: 'Groß', cost: 200 },
+];
+
+/** Emoji choices in the reward editor. */
+export const REWARD_EMOJIS = ['🎁', '🎬', '🥐', '🍽️', '😴', '🍝', '💆', '🍕', '🍦', '🎮', '📺', '🧺', '🛁', '🌹', '☕', '🎲'];
+
+/** Examples to adopt with one tap in the shop. */
+export const REWARD_SUGGESTIONS: { emoji: string; title: string; cost: number }[] = [
+  { emoji: '🎬', title: 'Film aussuchen', cost: 30 },
+  { emoji: '🥐', title: 'Frühstück ans Bett', cost: 80 },
+  { emoji: '🍽️', title: 'Einmal Spülen geschenkt', cost: 30 },
+  { emoji: '😴', title: 'Ausschlafen am Wochenende', cost: 80 },
+  { emoji: '🍝', title: 'Lieblingsessen wird gekocht', cost: 80 },
+  { emoji: '💆', title: 'Massage (10 min)', cost: 200 },
+];

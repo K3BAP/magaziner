@@ -5,6 +5,7 @@ import { useShoppingList } from './useShoppingList';
 import { useShoppingLists } from './useShoppingLists';
 import { useChores } from './useChores';
 import { useGame } from './useGame';
+import { useRewards } from './useRewards';
 import { useInventory } from './useInventory';
 import { useActivity, type ActivityEntry } from './useActivity';
 
@@ -37,6 +38,7 @@ export function useRealtime() {
   const lists = useShoppingLists();
   const chores = useChores();
   const game = useGame();
+  const shop = useRewards();
   const inventory = useInventory();
   const activity = useActivity();
 
@@ -77,6 +79,9 @@ export function useRealtime() {
     on('chores', (p) => chores.applyRemote(p.eventType, p.new as any, p.old as any));
     on('chore_completions', (p) => chores.applyRemoteCompletion(p.eventType, p.new as any, p.old as any));
     on('chore_areas', () => refetchAreas());
+    on('chore_kudos', (p) => chores.applyRemoteKudos(p.eventType, p.new as any), false);
+    on('rewards', (p) => shop.applyRemoteReward(p.eventType, p.new as any, p.old as any));
+    on('reward_redemptions', (p) => shop.applyRemoteRedemption(p.eventType, p.new as any, p.old as any), false);
     // Energy, weekly rollover, pauses — the daily job and other members' completions.
     on('household_game_state', () => game.refreshSoon(), false);
     on('items', (p) => {
