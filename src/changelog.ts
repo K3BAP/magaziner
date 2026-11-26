@@ -30,6 +30,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '2.6.0',
+    date: '2026-11-26',
+    title: 'Benachrichtigungen für Aufgaben',
+    items: [
+      'Morgen-Übersicht: Jeden Morgen um halb acht erfährst du, welche Aufgaben heute für dich dran sind (nicht im Urlaub oder in der Pause).',
+      'Du bekommst eine Nachricht, wenn jemand anderes eine Aufgabe erledigt oder einen Gutschein einlöst.',
+      'Fällt die Team-Energie unter 30, warnt euch die App einmal.',
+      'In den Einstellungen wählst du pro Gerät, welche Benachrichtigungen du bekommen möchtest.',
+    ],
+  },
+  {
     version: '2.5.0',
     date: '2026-11-26',
     title: 'Belohnungs-Shop & Kudos',

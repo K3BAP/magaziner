@@ -1,6 +1,6 @@
 # Aufgaben 3.0 – Gamification-Plan
 
-Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1 (2.3.0), M2 (2.4.0) und M3 (2.5.0) ausgeliefert**
+Stand: 2026-11-26 · Basis: `master` @ 9676f6f (Release 2.2.0) · Status: **freigegeben · M1 (2.3.0), M2 (2.4.0) und M3 (2.5.0) ausgeliefert · M4 (2.6.0) umgesetzt, noch nicht committet**
 
 Ziel: Aus der einfachen To-do-Liste wird ein Haushalts-Spiel, das zum Mitmachen motiviert:
 XP und Level pro Person, ein gemeinsames Wochenziel, Quests, Abzeichen, eine Team-Energie,
@@ -446,6 +446,14 @@ Kudos sind nur per SQL-Schutzprüfung und Code-Review getestet, weil der Test-Ha
 - Outbox verallgemeinern, Topics an Subscriptions, Schalter in den Einstellungen, `game_digest`-Cron,
   Erledigt-Meldung, Gutschein-Meldung, Energie-Warnung, `send-push` erweitern und deployen.
   Getestet wird wie in 2.2.0 über Function-Logs, echte Zustellung nur im Build bzw. Deploy.
+
+*Stand M4:* umgesetzt mit diesen Abweichungen: Der Finanz-Trigger bleibt unverändert (Default-Kind `finance`).
+Aufgaben-Events entstehen per Trigger auf `chore_completions` und `reward_redemptions` statt in den RPCs, die
+Energie-Warnung in `decay_energy`, die Morgen-Übersicht per Cron `magaziner-game-digest` um 06:30 UTC
+(07:30 Winterzeit, 08:30 Sommerzeit). Topics liegen pro Gerät an `push_subscriptions` (Default: alle an), Empfänger
+filtert `claim_push_event`. Ist die Erledigung bzw. der Gutschein beim Einlösen des Events schon zurückgenommen,
+geht nichts raus. Erledigt-Meldungen einer Person ersetzen sich auf dem Gerät (gleicher Tag). Getestet: die vier neuen
+Arten durch die deployte Function (HTTP 200) und die Empfänger-Filter per SQL; echte Zustellung nicht.
 
 **M5 – Aufräumen**
 - Nach Rückfrage: `todos`-Tabelle samt Trigger und Publikation löschen, `useTodos.ts`/`TodoRow.vue`/`TodoSheet.vue`

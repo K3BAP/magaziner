@@ -108,7 +108,7 @@ Kudos can't be exercised end-to-end in the one-member test household.
 
 ### Push notifications
 
-Web-Push, currently only for finance. Flow: `finance_transactions` INSERT → trigger
+Web-Push for finance and chores. Flow: `finance_transactions` INSERT → trigger
 `private.trg_finance_push` (skips rows without `auth.uid()`, i.e. seeds/admin SQL) writes an event
 into `private.push_outbox` and `pg_net`-posts `{ event_id }` to the Edge Function `send-push`
 (source in `supabase/functions/send-push/`, deployed with `verify_jwt = false`). The function
@@ -117,6 +117,16 @@ nothing), gets the text data plus the `push_subscriptions` of all **other** hous
 sends with `web-push` and deletes subscriptions that answer 404/410. Logs: `[send-push] …` in the
 function logs.
 
+- Chores (M4): events have a `kind` (`finance` default, `chore_done`, `reward_redeemed`, `energy_low`,
+  `digest`), a `payload` and optional `recipient_ids`, queued through `private.enqueue_push` (skips the
+  HTTP call when no matching subscription exists, never raises). Sources: triggers on
+  `chore_completions` / `reward_redemptions`, `private.decay_energy` (first drop below 30) and the
+  pg_cron job `magaziner-game-digest` (06:30 UTC → `private.digest_household` per household).
+  `push_subscriptions.topics` (`finance`, `digest`, `chore_done`, `reward`, `energy`; switched per device
+  via `set_push_topics`) filters recipients in `claim_push_event`. Test claim filtering in
+  `begin; … rollback;` with a fake `https://push.invalid/…` subscription for the test user, and
+  `compose()` by inserting an outbox row for the test household and `net.http_post`-ing its id
+  (the response lands in `net._http_response`).
 - Keys: public VAPID key in `.env` as `VITE_VAPID_PUBLIC_KEY`; `VAPID_PUBLIC_KEY`,
   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` are Edge Function secrets (Dashboard → Edge Functions →
   Secrets). The private key is never committed — locally it sits in the gitignored
@@ -129,7 +139,8 @@ function logs.
   `workbox.importScripts`. `npm run dev` registers no service worker, so push can only be tried in
   a build (`npm run build && npm run preview`) or the deployed app. iOS needs the app on the Home
   Screen (16.4+); without `PushManager` the Settings section explains that.
-- New push type: add a trigger + event shape and branch in `compose()` in the function.
+- New push type: add the kind to the outbox check and `private.push_topic`, enqueue it, and add a
+  branch in `compose()` in the function (redeploy with `verify_jwt = false`).
 
 ### State management
 

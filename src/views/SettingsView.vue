@@ -26,7 +26,7 @@ import { useChangelog, CURRENT_VERSION } from '../composables/useChangelog';
 import { confirmDialog } from '../composables/useConfirm';
 import { toast } from '../composables/useToast';
 import { authErrorMessage } from '../utils/authErrors';
-import { usePush, isIos, isStandalone } from '../composables/usePush';
+import { usePush, isIos, isStandalone, PUSH_TOPICS, type PushTopic } from '../composables/usePush';
 
 const router = useRouter();
 const { user, signOut, updatePassword, deleteAccount } = useAuth();
@@ -46,6 +46,8 @@ const pushOn = push.subscribed;
 const pushBusy = push.busy;
 const pushPermission = push.permission;
 const pushSupported = push.supported;
+const pushTopics = push.topics;
+const onToggleTopic = (topic: PushTopic, e: Event) => push.setTopic(topic, (e.target as HTMLInputElement).checked);
 const showIosHint = !pushSupported && isIos && !isStandalone;
 push.refresh();
 
@@ -258,10 +260,9 @@ const onDeleteAccount = async () => {
         <template v-if="pushSupported">
           <label class="flex items-start justify-between gap-4 cursor-pointer">
             <span>
-              <span class="block font-semibold">Neue Ausgaben und Zahlungen</span>
+              <span class="block font-semibold">Auf diesem Gerät</span>
               <span class="block text-xs text-base-content/60 mt-0.5">
-                Du bekommst eine Nachricht, wenn jemand anderes im Haushalt etwas in Finanzen einträgt.
-                Gilt nur für dieses Gerät.
+                Nachrichten zu Aufgaben, Gutscheinen und Finanzen. Was genau, wählst du darunter.
               </span>
             </span>
             <span class="flex items-center gap-2 shrink-0 mt-0.5">
@@ -276,6 +277,23 @@ const onDeleteAccount = async () => {
               />
             </span>
           </label>
+          <ul v-if="pushOn" class="mt-4 flex flex-col divide-y divide-base-200 border-t border-base-200">
+            <li v-for="t in PUSH_TOPICS" :key="t.key">
+              <label class="flex items-center justify-between gap-4 py-3 cursor-pointer">
+                <span>
+                  <span class="block text-sm font-medium">{{ t.label }}</span>
+                  <span class="block text-xs text-base-content/60">{{ t.hint }}</span>
+                </span>
+                <input
+                  type="checkbox"
+                  class="toggle toggle-sm toggle-primary shrink-0"
+                  :checked="pushTopics.includes(t.key)"
+                  :aria-label="t.label"
+                  @change="onToggleTopic(t.key, $event)"
+                />
+              </label>
+            </li>
+          </ul>
           <p v-if="pushPermission === 'denied'" class="text-xs text-warning mt-3">
             Dein Browser blockiert Benachrichtigungen für Magaziner. Erlaube sie in den
             Website-Einstellungen des Browsers, dann kannst du sie hier einschalten.

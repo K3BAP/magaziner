@@ -1,7 +1,8 @@
-// send-push — Web-Push für neue Finanz-Einträge.
+// send-push — Web-Push für Finanzen und Aufgaben.
 //
-// Aufgerufen vom DB-Trigger `private.trg_finance_push` (pg_net) mit
-// `{ event_id }`. Die Funktion löst das Event über `claim_push_event` (nur
+// Aufgerufen von `private.trg_finance_push` bzw. `private.enqueue_push` (pg_net)
+// mit `{ event_id }`. Event-Arten: finance, chore_done, reward_redeemed,
+// energy_low, digest. Die Funktion löst das Event über `claim_push_event` (nur
 // service_role) ein – ein gefälschter oder wiederholter Aufruf findet nichts
 // und verschickt nichts. Deshalb läuft sie mit verify_jwt = false.
 //
@@ -19,9 +20,15 @@ interface Subscription {
   auth: string;
 }
 
+type EventKind = 'finance' | 'chore_done' | 'reward_redeemed' | 'energy_low' | 'digest';
+
 interface ClaimedEvent {
   household_id: string;
-  transaction_id: string;
+  kind?: EventKind; // missing only from a pre-M4 claim, which is always finance
+  transaction_id: string | null;
+  payload?: Record<string, unknown>;
+  actor_name?: string | null;
+  household_name?: string | null;
   transaction: {
     type: 'expense' | 'payment';
     title: string | null;
@@ -30,14 +37,78 @@ interface ClaimedEvent {
     actor_name: string | null;
     payer_name: string | null;
     receiver_name: string | null;
-  };
+  } | null;
   subscriptions: Subscription[];
 }
 
 const euro = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
-function compose(ev: ClaimedEvent) {
-  const t = ev.transaction;
+interface Message {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+}
+
+const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
+
+function compose(ev: ClaimedEvent): Message {
+  const kind = ev.kind ?? 'finance';
+  const p = ev.payload ?? {};
+  const who = str(ev.actor_name) || 'Jemand';
+  const house = str(ev.household_name);
+  const titled = (prefix: string) => (house ? `${prefix} · ${house}` : prefix);
+
+  switch (kind) {
+    case 'chore_done': {
+      const xp = num(p.xp);
+      const rescue = p.rescue === true ? ' – gerettet! 🦸' : '';
+      return {
+        title: titled('Aufgaben'),
+        body: `${who} hat „${str(p.title) || 'eine Aufgabe'}“ erledigt${xp ? ` (+${xp} XP)` : ''}${rescue}`,
+        url: '/todos',
+        // One line per person: a burst of completions replaces itself.
+        tag: `chore-done-${ev.household_id}-${who}`,
+      };
+    }
+    case 'reward_redeemed':
+      return {
+        title: titled('Gutschein eingelöst'),
+        body: `${who} hat ${str(p.emoji)} „${str(p.title)}“ eingelöst – wer erfüllt ihn?`,
+        url: '/todos?view=shop',
+        tag: `reward-${str(p.redemption_id)}`,
+      };
+    case 'energy_low': {
+      const red = num(p.red);
+      return {
+        title: titled('Team-Energie niedrig 😩'),
+        body: `Nur noch ${num(p.energy)} von 100${red ? ` – ${red} ${red === 1 ? 'Aufgabe ist' : 'Aufgaben sind'} lange überfällig` : ''}. Unter 30 gibt es nur halbe Münzen.`,
+        url: '/todos',
+        tag: `energy-${ev.household_id}`,
+      };
+    }
+    case 'digest': {
+      const count = num(p.count);
+      const late = num(p.late);
+      const titles = Array.isArray(p.titles) ? (p.titles as unknown[]).map(str).filter(Boolean) : [];
+      const more = count > titles.length ? ` und ${count - titles.length} weitere` : '';
+      return {
+        title: 'Guten Morgen! ☀️',
+        body:
+          `${count === 1 ? 'Heute ist eine Aufgabe dran' : `Heute sind ${count} Aufgaben dran`}` +
+          `${late ? ` (${late} überfällig)` : ''}: ${titles.join(', ')}${more}.`,
+        url: '/todos',
+        tag: `digest-${ev.household_id}`,
+      };
+    }
+    case 'finance':
+      return composeFinance(ev);
+  }
+}
+
+function composeFinance(ev: ClaimedEvent): Message {
+  const t = ev.transaction!;
   const who = t.actor_name?.trim() || 'Jemand';
   const amount = euro.format(Number(t.amount));
   let body: string;
@@ -94,7 +165,7 @@ Deno.serve(async (req) => {
     return json({ error: 'claim failed' }, 500);
   }
   if (!data) {
-    console.log(`[send-push] event ${eventId}: unknown, already sent or transaction gone`);
+    console.log(`[send-push] event ${eventId}: unknown, already sent or subject gone`);
     return json({ sent: 0 });
   }
 
@@ -124,7 +195,7 @@ Deno.serve(async (req) => {
   }
 
   console.log(
-    `[send-push] event ${eventId} (household ${ev.household_id}): ` +
+    `[send-push] event ${eventId} ${ev.kind ?? 'finance'} (household ${ev.household_id}): ` +
     `${ev.subscriptions.length} subscriptions, ${sent} sent, ${expired.length} expired removed`,
   );
   return json({ sent, expired: expired.length, total: ev.subscriptions.length });

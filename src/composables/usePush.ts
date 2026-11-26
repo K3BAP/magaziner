@@ -8,8 +8,20 @@ import { toast } from './useToast';
  * The subscription lives in the browser (PushManager); we mirror it into
  * `push_subscriptions` via the `register_push_subscription` RPC so the
  * `send-push` Edge Function can reach it. Sending is entirely server-side
- * (trigger on `finance_transactions` → pg_net → Edge Function).
+ * (DB triggers / cron → outbox → pg_net → Edge Function). Each device picks
+ * its topics (`push_subscriptions.topics`, set via `set_push_topics`).
  */
+
+export type PushTopic = 'finance' | 'digest' | 'chore_done' | 'reward' | 'energy';
+
+export const PUSH_TOPICS: { key: PushTopic; label: string; hint: string }[] = [
+  { key: 'digest', label: 'Morgen-Übersicht', hint: 'Jeden Morgen, was heute für dich dran ist.' },
+  { key: 'chore_done', label: 'Erledigte Aufgaben', hint: 'Wenn jemand anderes eine Aufgabe abhakt.' },
+  { key: 'reward', label: 'Gutscheine', hint: 'Wenn jemand eine Belohnung einlöst.' },
+  { key: 'energy', label: 'Energie-Warnung', hint: 'Wenn die Team-Energie unter 30 fällt.' },
+  { key: 'finance', label: 'Finanzen', hint: 'Neue Ausgaben und Zahlungen der anderen.' },
+];
+const ALL_TOPICS = PUSH_TOPICS.map((t) => t.key);
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -23,6 +35,8 @@ const supported =
 const permission = ref<NotificationPermission>(supported ? Notification.permission : 'default');
 const subscribed = ref(false);
 const busy = ref(false);
+const topics = ref<PushTopic[]>([...ALL_TOPICS]);
+let endpoint: string | null = null;
 
 /** iPhone/iPad (iPadOS reports itself as a Mac with touch). */
 export const isIos =
@@ -73,6 +87,24 @@ async function save(sub: PushSubscription) {
     p_user_agent: navigator.userAgent,
   });
   if (error) throw error;
+  endpoint = sub.endpoint;
+  const { data } = await supabase.from('push_subscriptions').select('topics').eq('endpoint', sub.endpoint).maybeSingle();
+  if (data?.topics) topics.value = data.topics as PushTopic[];
+}
+
+/** Switch one topic for this device. */
+async function setTopic(topic: PushTopic, on: boolean) {
+  if (!endpoint) return;
+  const prev = topics.value;
+  const next = on ? [...new Set([...prev, topic])] : prev.filter((t) => t !== topic);
+  topics.value = next;
+  const { data, error } = await supabase.rpc('set_push_topics', { p_endpoint: endpoint, p_topics: next });
+  if (error) {
+    topics.value = prev;
+    toast.error('Einstellung konnte nicht gespeichert werden.', error);
+    return;
+  }
+  topics.value = (data ?? next) as PushTopic[];
 }
 
 async function removeRow(endpoint: string) {
@@ -171,5 +203,5 @@ export async function forgetPushOnThisDevice() {
 }
 
 export function usePush() {
-  return { supported, permission, subscribed, busy, refresh, enable, disable };
+  return { supported, permission, subscribed, busy, topics, refresh, enable, disable, setTopic };
 }
